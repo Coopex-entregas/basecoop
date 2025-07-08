@@ -1,20 +1,14 @@
-from flask import Flask
-from config import Config
-from models import db
-from routes import main
+import os
 
-def create_app():
-    app = Flask(__name__)
-    app.config.from_object(Config)
+class Config:
+    # Se quiser usar variável de ambiente, por exemplo:
+    SECRET_KEY = os.environ.get('SECRET_KEY') or 'sua-chave-secreta-aqui'
 
-    db.init_app(app)
+    # URL de conexão com o banco PostgreSQL no Render (exemplo)
+    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
+        'postgresql://usuario:senha@host:porta/nome_do_banco'
 
-    # Blueprint
-    app.register_blueprint(main)
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
 
-    return app
-
-# Executar diretamente
-if __name__ == "__main__":
-    app = create_app()
-    app.run(debug=True)
+    # Outras configs que quiser adicionar
+    DEBUG = False
