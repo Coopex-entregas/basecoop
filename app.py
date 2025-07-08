@@ -1,68 +1,89 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash
+from flask import Flask, render_template, request, redirect, url_for, send_file
+import io
+import pandas as pd
 
 app = Flask(__name__)
-app.secret_key = 'chave_super_secreta'
 
-# Usuários fixos para exemplo (username: senha, tipo)
-users = {
-    'coopex': {'password': '05062721', 'role': 'admin'},
-    'coop1': {'password': 'senha1', 'role': 'cooperado'},
-    'coop2': {'password': 'senha2', 'role': 'cooperado'}
-}
-
-# Dados de entregas de exemplo
+# Dados simulados
 entregas = [
-    {'id': 1, 'cooperado': 'coop1', 'cliente': 'Cliente A', 'valor': 50, 'status': 'Pendente'},
-    {'id': 2, 'cooperado': 'coop2', 'cliente': 'Cliente B', 'valor': 70, 'status': 'Pago'},
-    {'id': 3, 'cooperado': 'coop1', 'cliente': 'Cliente C', 'valor': 40, 'status': 'Pago'},
+    {'id': 1, 'cliente': 'Cliente A', 'bairro': 'Centro', 'valor': 50.0, 'status': 'Pendente', 'cooperado': 'Cooperado 2'},
+    {'id': 2, 'cliente': 'Cliente B', 'bairro': 'Bairro X', 'valor': 70.0, 'status': 'Pago', 'cooperado': 'Cooperado 1'},
+    {'id': 3, 'cliente': 'Cliente C', 'bairro': 'Lagoa Nova', 'valor': 40.0, 'status': 'Pendente', 'cooperado': None},
 ]
 
-@app.route('/')
-def home():
-    if 'user' in session:
-        role = session.get('role')
-        if role == 'admin':
-            return redirect(url_for('dashboard_admin'))
-        else:
-            return redirect(url_for('dashboard_cooperado'))
-    return redirect(url_for('login'))
+@app.route('/admin_dashboard', methods=['GET', 'POST'])
+def admin_dashboard():
+    global entregas
 
-@app.route('/login', methods=['GET', 'POST'])
-def login():
     if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        user = users.get(username)
-        if user and user['password'] == password:
-            session['user'] = username
-            session['role'] = user['role']
-            flash('Login realizado com sucesso!', 'success')
-            return redirect(url_for('home'))
-        else:
-            flash('Usuário ou senha incorretos.', 'danger')
-    return render_template('login.html')
+        # Alterar status e cooperado de uma entrega existente
+        if 'alterar_status_id' in request.form:
+            eid = int(request.form['alterar_status_id'])
+            novo_status = request.form.get('novo_status', 'Pendente')
+            novo_cooperado = request.form.get('novo_cooperado', '').strip() or None
 
-@app.route('/dashboard/admin')
-def dashboard_admin():
-    if session.get('role') != 'admin':
-        flash('Acesso negado.', 'danger')
-        return redirect(url_for('login'))
-    return render_template('dashboard_admin.html', entregas=entregas)
+            for e in entregas:
+                if e['id'] == eid:
+                    e['status'] = novo_status
+                    e['cooperado'] = novo_cooperado
+                    break
+            return redirect(url_for('admin_dashboard'))
 
-@app.route('/dashboard/cooperado')
-def dashboard_cooperado():
-    if session.get('role') != 'cooperado':
-        flash('Acesso negado.', 'danger')
-        return redirect(url_for('login'))
-    user = session.get('user')
-    entregas_user = [e for e in entregas if e['cooperado'] == user]
-    return render_template('dashboard_cooperado.html', entregas=entregas_user, cooperado=user)
+        # Cadastrar nova entrega
+        cliente = request.form.get('cliente', '').strip()
+        if cliente:
+            bairro = request.form.get('bairro', '').strip()
+            valor = float(request.form.get('valor', 0) or 0)
+            status = request.form.get('status', 'Pendente')
+            cooperado = request.form.get('cooperado', '').strip() or None
 
-@app.route('/logout')
-def logout():
-    session.clear()
-    flash('Você saiu do sistema.', 'info')
-    return redirect(url_for('login'))
+            nova_id = max([e['id'] for e in entregas]) + 1 if entregas else 1
+            entregas.append({
+                'id': nova_id,
+                'cliente': cliente,
+                'bairro': bairro,
+                'valor': valor,
+                'status': status,
+                'cooperado': cooperado
+            })
+            return redirect(url_for('admin_dashboard'))
+
+    entregas_com_cooperado = [e for e in entregas if e['cooperado']]
+    entregas_sem_cooperado = [e for e in entregas if not e['cooperado']]
+
+    return render_template('admin_dashboard.html',
+                           entregas_com_cooperado=entregas_com_cooperado,
+                           entregas_sem_cooperado=entregas_sem_cooperado)
+
+@app.route('/cooperado/<nome>', methods=['GET', 'POST'])
+def cooperado_dashboard(nome):
+    global entregas
+    entregas_do_cooperado = [e for e in entregas if e['cooperado'] == nome]
+
+    if request.method == 'POST':
+        entrega_id = int(request.form['entrega_id'])
+        novo_status = request.form.get('novo_status', 'Pendente')
+        for e in entregas:
+            if e['id'] == entrega_id and e['cooperado'] == nome:
+                e['status'] = novo_status
+                break
+        return redirect(url_for('cooperado_dashboard', nome=nome))
+
+    return render_template('cooperado_dashboard.html', cooperado=nome, entregas=entregas_do_cooperado)
+
+@app.route('/exportar_excel')
+def exportar_excel():
+    df = pd.DataFrame(entregas)
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Entregas')
+    output.seek(0)
+    return send_file(
+        output,
+        download_name="relatorio_entregas.xlsx",
+        as_attachment=True,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
 
 if __name__ == '__main__':
     app.run(debug=True)
