@@ -1,22 +1,24 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8" />
-  <title>{% block title %}Sistema de Entregas{% endblock %}</title>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
-    h1, h2, h3 { color: #333; }
-    form { background: #fff; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
-    label { display: block; margin-top: 10px; }
-    input, select, button { margin-top: 5px; padding: 8px; width: 100%; max-width: 300px; }
-    ul { list-style-type: none; padding-left: 0; }
-    li { background: #fff; margin-bottom: 8px; padding: 10px; border-radius: 5px; }
-    hr { margin: 30px 0; border: 1px solid #ccc; }
-    button { cursor: pointer; background-color: #007bff; color: white; border: none; }
-    button:hover { background-color: #0056b3; }
-  </style>
+    <meta charset="UTF-8" />
+    <title>Dashboard Cooperado</title>
 </head>
 <body>
-  {% block content %}{% endblock %}
+    <h1>Bem-vindo, {{ usuario }}</h1>
+    <a href="{{ url_for('logout') }}">Logout</a>
+
+    <h2>Suas Entregas</h2>
+    {% if entregas %}
+        <ul>
+        {% for e in entregas %}
+            <li>
+                ID {{ e.id }} | Cliente: {{ e.cliente }} | Bairro: {{ e.bairro }} | Valor: R$ {{ "%.2f"|format(e.valor) }} | Status: {{ e.status }}
+            </li>
+        {% endfor %}
+        </ul>
+    {% else %}
+        <p>Você não tem entregas cadastradas.</p>
+    {% endif %}
 </body>
 </html>

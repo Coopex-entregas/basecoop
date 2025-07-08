@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head><title>Cadastrar Cooperado</title></head>
+<body>
+<h2>Cadastrar Cooperado</h2>
+<a href="{{ url_for('admin_dashboard') }}">Voltar</a>
+
+{% if erro %}
+<p style="color:red;">{{ erro }}</p>
+{% endif %}
+
+<form method="POST">
+    Nome: <input type="text" name="nome" required><br>
+    Senha: <input type="password" name="senha" required><br>
+    <button type="submit">Cadastrar</button>
+</form>
+</body>
+</html>

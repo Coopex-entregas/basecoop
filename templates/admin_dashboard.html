@@ -1,79 +1,57 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  <title>Admin Dashboard</title>
-</head>
+<head><meta charset="UTF-8"><title>Admin Dashboard</title></head>
 <body>
-<h1>Bem-vindo, Admin!</h1>
+<h1>Admin Dashboard</h1>
+<p><a href="{{ url_for('logout') }}">Logout</a></p>
 
-<h2>Cadastrar Nova Entrega</h2>
-<form method="POST" action="{{ url_for('admin_dashboard') }}">
-  <label>Cliente:</label><br/>
-  <input type="text" name="cliente" required><br/>
-
-  <label>Bairro:</label><br/>
-  <input type="text" name="bairro" required><br/>
-
-  <label>Valor:</label><br/>
-  <input type="number" name="valor" step="0.01" min="0" required><br/>
-
-  <label>Status:</label><br/>
-  <select name="status" required>
-    <option value="Pendente" selected>Pendente</option>
-    <option value="Pago">Pago</option>
-  </select><br/>
-
-  <label>Cooperado (opcional):</label><br/>
-  <input type="text" name="cooperado" placeholder="Nome do cooperado"><br/><br/>
-
+<h2>Cadastro de Entrega</h2>
+<form method="POST">
+  <input type="hidden" name="nova_entrega" value="1">
+  Cliente: <input type="text" name="cliente" required><br>
+  Bairro: <input type="text" name="bairro" required><br>
+  Valor: <input type="number" step="0.01" name="valor" required><br>
+  Status:
+  <select name="status">
+    <option>Pendente</option>
+    <option>Pago</option>
+  </select><br>
+  Cooperado:
+  <select name="cooperado">
+    <option value="">--Nenhum--</option>
+    {% for c in cooperados %}
+    <option value="{{ c }}">{{ c }}</option>
+    {% endfor %}
+  </select><br>
   <button type="submit">Cadastrar Entrega</button>
 </form>
 
-<hr/>
-
-<h2>Entregas com Cooperado</h2>
-{% if entregas_com_cooperado %}
-  <ul>
-  {% for e in entregas_com_cooperado %}
-    <li>
-      ID {{ e.id }} | Cliente: {{ e.cliente }} | Cooperado: {{ e.cooperado }} | Bairro: {{ e.bairro }} | Valor: R$ {{ "%.2f"|format(e.valor) }} | Status: {{ e.status }}
-      <form method="POST" style="margin-top:5px;">
-        <input type="hidden" name="alterar_status_id" value="{{ e.id }}">
-        <label>Status:</label>
-        <select name="novo_status">
-          <option value="Pendente" {% if e.status == 'Pendente' %}selected{% endif %}>Pendente</option>
-          <option value="Pago" {% if e.status == 'Pago' %}selected{% endif %}>Pago</option>
-        </select>
-        <label>Cooperado:</label>
-        <input type="text" name="novo_cooperado" value="{{ e.cooperado }}">
-        <button type="submit">Salvar</button>
-      </form>
-    </li>
-  {% endfor %}
-  </ul>
-{% else %}
-  <p>Nenhuma entrega com cooperado.</p>
-{% endif %}
-
-<hr/>
-
-<h2>Entregas sem Cooperado</h2>
-{% if entregas_sem_cooperado %}
-  <ul>
-  {% for e in entregas_sem_cooperado %}
-    <li>ID {{ e.id }} | Cliente: {{ e.cliente }} | Valor: R$ {{ "%.2f"|format(e.valor) }} | Bairro: {{ e.bairro }} | Status: {{ e.status }}</li>
-  {% endfor %}
-  </ul>
-{% else %}
-  <p>Nenhuma entrega sem cooperado.</p>
-{% endif %}
-
-<hr/>
-
-<form method="GET" action="{{ url_for('exportar_excel') }}">
-  <button type="submit">Gerar Relatório Excel</button>
+<h2>Cadastro de Cooperado</h2>
+<form method="POST">
+  <input type="hidden" name="novo_cooperado" value="1">
+  Nome (login): <input type="text" name="coop_name" required><br>
+  Senha: <input type="password" name="coop_pass" required><br>
+  <button type="submit">Cadastrar Cooperado</button>
 </form>
+
+<h2>Entregas Cadastradas</h2>
+<table border="1" cellpadding="5" cellspacing="0">
+  <tr>
+    <th>ID</th><th>Cliente</th><th>Bairro</th><th>Valor</th><th>Status</th><th>Cooperado</th>
+  </tr>
+  {% for e in entregas %}
+  <tr>
+    <td>{{ e.id }}</td>
+    <td>{{ e.cliente }}</td>
+    <td>{{ e.bairro }}</td>
+    <td>R$ {{ "%.2f"|format(e.valor) }}</td>
+    <td>{{ e.status }}</td>
+    <td>{{ e.cooperado or "-" }}</td>
+  </tr>
+  {% endfor %}
+</table>
+
+<p><a href="{{ url_for('exportar_excel') }}">Exportar Entregas para Excel</a></p>
 
 </body>
 </html>
