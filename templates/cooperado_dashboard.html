@@ -1,1 +1,28 @@
-# Conteúdo inicial de cooperado_dashboard.html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Painel do Cooperado</title>
+</head>
+<body>
+    <h1>Bem-vindo, {{ nome }}</h1>
+
+    <h2>📦 Suas Entregas</h2>
+    <table border="1">
+        <tr>
+            <th>ID</th><th>Cliente</th><th>Valor</th><th>Bairro</th><th>Status</th>
+        </tr>
+        {% for e in entregas %}
+        <tr>
+            <td>{{ e.id }}</td>
+            <td>{{ e.cliente }}</td>
+            <td>R$ {{ e.valor }}</td>
+            <td>{{ e.bairro }}</td>
+            <td>{{ e.status_pagamento }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+
+    <h3>Total em R$: R$ {{ total }}</h3>
+</body>
+</html>
+

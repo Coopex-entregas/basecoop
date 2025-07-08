@@ -1,1 +1,57 @@
-# Conteúdo inicial de admin_dashboard.html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Painel do Administrador</title>
+</head>
+<body>
+    <h1>Painel do Administrador</h1>
+
+    <h2>📋 Cadastrar Cooperado</h2>
+    <form method="POST" action="/admin/cadastrar_cooperado">
+        Nome: <input type="text" name="nome" required>
+        Telefone: <input type="text" name="telefone" required>
+        <button type="submit">Cadastrar</button>
+    </form>
+
+    <h2>📝 Criar Entrega</h2>
+    <form method="POST" action="/admin/criar_entrega">
+        Cliente: <input type="text" name="cliente" required>
+        Cooperado:
+        <select name="cooperado" required>
+            {% for c in cooperados %}
+                <option value="{{ c.nome }}">{{ c.nome }}</option>
+            {% endfor %}
+        </select>
+        Valor (R$): <input type="text" name="valor" required>
+        Bairro de encerramento: <input type="text" name="bairro" required>
+        <button type="submit">Criar</button>
+    </form>
+
+    <h2>📦 Entregas Recentes</h2>
+    <table border="1">
+        <tr>
+            <th>ID</th><th>Cliente</th><th>Cooperado</th><th>Valor</th>
+            <th>Bairro</th><th>Status</th><th>Ações</th>
+        </tr>
+        {% for e in entregas %}
+        <tr>
+            <td>{{ e.id }}</td>
+            <td>{{ e.cliente }}</td>
+            <td>{{ e.nome_cooperado }}</td>
+            <td>R$ {{ e.valor }}</td>
+            <td>{{ e.bairro }}</td>
+            <td>{{ e.status_pagamento }}</td>
+            <td>
+                <a href="/admin/marcar_pago/{{ e.id }}">Pagar</a> |
+                <a href="/admin/excluir_entrega/{{ e.id }}">Excluir</a>
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+
+    <h2>📈 Extrato Geral</h2>
+    <p>Total de entregas: {{ entregas|length }}</p>
+    <p>Total em R$: R$ {{ total_geral }}</p>
+</body>
+</html>
+
