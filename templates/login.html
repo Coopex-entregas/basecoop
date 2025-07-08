@@ -1,12 +1,13 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
-<head><meta charset="UTF-8"><title>Login</title></head>
+<html>
+<head><title>Login</title></head>
 <body>
-<h1>Login</h1>
-<form method="POST">
-  Usuário: <input type="text" name="user" required><br>
-  Senha: <input type="password" name="password" required><br>
-  <button type="submit">Entrar</button>
-</form>
+    <h1>Login</h1>
+    {% if erro %}<p style="color:red">{{ erro }}</p>{% endif %}
+    <form method="POST">
+        Nome: <input type="text" name="nome"><br>
+        Senha: <input type="password" name="senha"><br>
+        <button type="submit">Entrar</button>
+    </form>
 </body>
 </html>

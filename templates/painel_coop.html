@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head><title>Painel Cooperado</title></head>
+<body>
+<h1>Bem-vindo, {{ usuario }}</h1>
+<a href="{{ url_for('logout') }}">Sair</a>
+<h2>Suas Entregas</h2>
+<ul>
+{% for e in entregas %}
+    <li>ID {{ e.id }} - {{ e.cliente }} | {{ e.bairro }} | R$ {{ "%.2f"|format(e.valor) }} |
+    <form method="POST" action="{{ url_for('mudar_status', id=e.id) }}" style="display:inline;">
+        <select name="status">
+            <option {% if e.status=='pendente' %}selected{% endif %}>pendente</option>
+            <option {% if e.status=='em rota' %}selected{% endif %}>em rota</option>
+            <option {% if e.status=='entregue' %}selected{% endif %}>entregue</option>
+        </select>
+        <button type="submit">Atualizar</button>
+    </form>
+    </li>
+{% endfor %}
+</ul>
+</body>
+</html>

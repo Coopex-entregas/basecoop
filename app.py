@@ -1,128 +1,107 @@
 from flask import Flask, render_template, request, redirect, url_for, session, send_file
+from flask_sqlalchemy import SQLAlchemy
+from werkzeug.security import generate_password_hash, check_password_hash
 import pandas as pd
-import io
+from io import BytesIO
+import os
 
 app = Flask(__name__)
-app.secret_key = 'super_secret_key'
+app.secret_key = "segredo"
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///entregas.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
 
-# Simulação de dados em memória
-entregas = []
-cooperados = {
-    'cooperado1': '123',
-    'cooperado2': '456',
-}
-# Login fixo do admin
-ADMIN_USER = 'admin'
-ADMIN_PASS = '05062721'
+class Usuario(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(100), nullable=False, unique=True)
+    senha_hash = db.Column(db.String(200), nullable=False)
+    tipo = db.Column(db.String(10), nullable=False)  # adm ou coop
 
-@app.route('/')
-def home():
-    if 'user' in session:
-        if session['user'] == ADMIN_USER:
-            return redirect(url_for('admin_dashboard'))
-        else:
-            return redirect(url_for('cooperado_dashboard'))
-    return redirect(url_for('login'))
+    def verificar_senha(self, senha):
+        return check_password_hash(self.senha_hash, senha)
 
-@app.route('/login', methods=['GET', 'POST'])
+class Entrega(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    cliente = db.Column(db.String(100), nullable=False)
+    bairro = db.Column(db.String(100), nullable=False)
+    valor = db.Column(db.Float, nullable=False)
+    cooperado_nome = db.Column(db.String(100), nullable=False)
+    status = db.Column(db.String(20), default="pendente")
+
+@app.route("/", methods=["GET", "POST"])
 def login():
-    if request.method == 'POST':
-        user = request.form['user'].strip().lower()
-        password = request.form['password']
+    if request.method == "POST":
+        nome = request.form["nome"]
+        senha = request.form["senha"]
+        usuario = Usuario.query.filter_by(nome=nome).first()
+        if usuario and usuario.verificar_senha(senha):
+            session["usuario"] = usuario.nome
+            session["tipo"] = usuario.tipo
+            return redirect("/painel")
+        else:
+            return render_template("login.html", erro="Usuário ou senha inválido.")
+    return render_template("login.html")
 
-        if user == ADMIN_USER and password == ADMIN_PASS:
-            session['user'] = ADMIN_USER
-            return redirect(url_for('admin_dashboard'))
+@app.route("/painel")
+def painel():
+    if "usuario" not in session:
+        return redirect("/")
+    usuario = session["usuario"]
+    tipo = session["tipo"]
+    if tipo == "adm":
+        entregas = Entrega.query.all()
+        cooperados = Usuario.query.filter_by(tipo="coop").all()
+        return render_template("painel_adm.html", usuario=usuario, entregas=entregas, cooperados=cooperados)
+    else:
+        entregas = Entrega.query.filter_by(cooperado_nome=usuario).all()
+        return render_template("painel_coop.html", usuario=usuario, entregas=entregas)
 
-        if user in cooperados and cooperados[user] == password:
-            session['user'] = user
-            return redirect(url_for('cooperado_dashboard'))
-
-        return "Usuário ou senha inválidos", 401
-
-    return render_template('login.html')
-
-@app.route('/logout')
+@app.route("/logout")
 def logout():
-    session.pop('user', None)
-    return redirect(url_for('login'))
+    session.clear()
+    return redirect("/")
 
-# ADMIN DASHBOARD
-@app.route('/admin', methods=['GET', 'POST'])
-def admin_dashboard():
-    if 'user' not in session or session['user'] != ADMIN_USER:
-        return redirect(url_for('login'))
+@app.route("/nova_entrega", methods=["POST"])
+def nova_entrega():
+    if session.get("tipo") != "adm":
+        return redirect("/painel")
+    cliente = request.form["cliente"]
+    bairro = request.form["bairro"]
+    valor = float(request.form["valor"])
+    cooperado = request.form["cooperado"]
+    entrega = Entrega(cliente=cliente, bairro=bairro, valor=valor, cooperado_nome=cooperado)
+    db.session.add(entrega)
+    db.session.commit()
+    return redirect("/painel")
 
-    global entregas, cooperados
+@app.route("/mudar_status/<int:id>", methods=["POST"])
+def mudar_status(id):
+    nova = request.form["status"]
+    entrega = Entrega.query.get(id)
+    if entrega and (session["tipo"] == "adm" or entrega.cooperado_nome == session["usuario"]):
+        entrega.status = nova
+        db.session.commit()
+    return redirect("/painel")
 
-    if request.method == 'POST':
-        # Pode cadastrar entrega ou cooperado dependendo do form enviado
-        if 'nova_entrega' in request.form:
-            cliente = request.form.get('cliente', '').strip()
-            bairro = request.form.get('bairro', '').strip()
-            valor = float(request.form.get('valor', 0) or 0)
-            status = request.form.get('status', 'Pendente')
-            cooperado = request.form.get('cooperado', '').strip().lower() or None
-
-            nova_id = max([e['id'] for e in entregas], default=0) + 1
-            entregas.append({
-                'id': nova_id,
-                'cliente': cliente,
-                'bairro': bairro,
-                'valor': valor,
-                'status': status,
-                'cooperado': cooperado
-            })
-        elif 'novo_cooperado' in request.form:
-            coop_name = request.form.get('coop_name', '').strip().lower()
-            coop_pass = request.form.get('coop_pass', '').strip()
-            if coop_name and coop_pass:
-                cooperados[coop_name] = coop_pass
-
-        return redirect(url_for('admin_dashboard'))
-
-    return render_template('admin_dashboard.html', entregas=entregas, cooperados=cooperados)
-
-# COOPERADO DASHBOARD
-@app.route('/cooperado', methods=['GET', 'POST'])
-def cooperado_dashboard():
-    if 'user' not in session or session['user'] == ADMIN_USER:
-        return redirect(url_for('login'))
-
-    user = session['user']
-    global entregas
-
-    if request.method == 'POST':
-        # Cooperado pode atualizar status de suas entregas
-        entrega_id = int(request.form.get('entrega_id'))
-        novo_status = request.form.get('status', 'Pendente')
-        for e in entregas:
-            if e['id'] == entrega_id and e.get('cooperado') == user:
-                e['status'] = novo_status
-                break
-        return redirect(url_for('cooperado_dashboard'))
-
-    entregas_user = [e for e in entregas if e.get('cooperado') == user]
-    return render_template('cooperado_dashboard.html', entregas=entregas_user, usuario=user)
-
-# Exportar Excel (só admin)
-@app.route('/exportar_excel')
-def exportar_excel():
-    if 'user' not in session or session['user'] != ADMIN_USER:
-        return redirect(url_for('login'))
-
-    df = pd.DataFrame(entregas)
-    output = io.BytesIO()
+@app.route("/exportar")
+def exportar():
+    entregas = Entrega.query.all()
+    data = [{
+        "ID": e.id,
+        "Cliente": e.cliente,
+        "Bairro": e.bairro,
+        "Valor": e.valor,
+        "Cooperado": e.cooperado_nome,
+        "Status": e.status
+    } for e in entregas]
+    df = pd.DataFrame(data)
+    output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False, sheet_name='Entregas')
+        df.to_excel(writer, index=False, sheet_name="Entregas")
     output.seek(0)
+    return send_file(output, as_attachment=True, download_name="entregas.xlsx", mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
-    return send_file(
-        output,
-        download_name="relatorio_entregas.xlsx",
-        as_attachment=True,
-        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    )
-
-if __name__ == '__main__':
+if __name__ == "__main__":
+    with app.app_context():
+        db.create_all()
     app.run(debug=True)
