@@ -1,21 +1,35 @@
 <!DOCTYPE html>
 <html lang="pt-br">
-<head><meta charset="UTF-8"><title>Dashboard ADM</title></head>
+<head>
+    <meta charset="UTF-8" />
+    <title>Dashboard Admin</title>
+</head>
 <body>
-  <h1>Bem-vindo, ADM {{ session.user }}</h1>
-  <a href="{{ url_for('logout') }}">Sair</a>
-  <h2>Todas Entregas</h2>
-  <table border="1" cellpadding="5" cellspacing="0">
-    <tr><th>ID</th><th>Cooperado</th><th>Cliente</th><th>Valor</th><th>Status</th></tr>
-    {% for e in entregas %}
-      <tr>
-        <td>{{ e.id }}</td>
-        <td>{{ e.cooperado }}</td>
-        <td>{{ e.cliente }}</td>
-        <td>R$ {{ e.valor }}</td>
-        <td>{{ e.status }}</td>
-      </tr>
-    {% endfor %}
-  </table>
+    <h1>Dashboard Administrador</h1>
+    <p><a href="{{ url_for('logout') }}">Sair</a></p>
+
+    <h2>Entregas</h2>
+    <table border="1" cellpadding="5" cellspacing="0">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Cooperado</th>
+                <th>Cliente</th>
+                <th>Valor</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for e in entregas %}
+            <tr>
+                <td>{{ e.id }}</td>
+                <td>{{ e.cooperado }}</td>
+                <td>{{ e.cliente }}</td>
+                <td>R$ {{ e.valor }}</td>
+                <td>{{ e.status }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
 </body>
 </html>

@@ -1,20 +1,35 @@
 <!DOCTYPE html>
 <html lang="pt-br">
-<head><meta charset="UTF-8"><title>Dashboard Cooperado</title></head>
+<head>
+    <meta charset="UTF-8" />
+    <title>Dashboard Cooperado</title>
+</head>
 <body>
-  <h1>Bem-vindo, Cooperado {{ cooperado }}</h1>
-  <a href="{{ url_for('logout') }}">Sair</a>
-  <h2>Suas Entregas</h2>
-  <table border="1" cellpadding="5" cellspacing="0">
-    <tr><th>ID</th><th>Cliente</th><th>Valor</th><th>Status</th></tr>
-    {% for e in entregas %}
-      <tr>
-        <td>{{ e.id }}</td>
-        <td>{{ e.cliente }}</td>
-        <td>R$ {{ e.valor }}</td>
-        <td>{{ e.status }}</td>
-      </tr>
-    {% endfor %}
-  </table>
+    <h1>Dashboard Cooperado: {{ cooperado }}</h1>
+    <p><a href="{{ url_for('logout') }}">Sair</a></p>
+
+    <h2>Minhas Entregas</h2>
+    <table border="1" cellpadding="5" cellspacing="0">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Cliente</th>
+                <th>Valor</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for e in entregas %}
+            <tr>
+                <td>{{ e.id }}</td>
+                <td>{{ e.cliente }}</td>
+                <td>R$ {{ e.valor }}</td>
+                <td>{{ e.status }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4">Nenhuma entrega encontrada.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
 </body>
 </html>
