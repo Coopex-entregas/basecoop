@@ -1,14 +1,11 @@
-import os
+from flask import Flask
 
-class Config:
-    # Se quiser usar variável de ambiente, por exemplo:
-    SECRET_KEY = os.environ.get('SECRET_KEY') or 'sua-chave-secreta-aqui'
+app = Flask(__name__)
 
-    # URL de conexão com o banco PostgreSQL no Render (exemplo)
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
-        'postgresql://usuario:senha@host:porta/nome_do_banco'
+@app.route('/')
+def index():
+    return "Sistema da Cooperativa funcionando!"
 
-    SQLALCHEMY_TRACK_MODIFICATIONS = False
+if __name__ == "__main__":
+    app.run(debug=True)
 
-    # Outras configs que quiser adicionar
-    DEBUG = False

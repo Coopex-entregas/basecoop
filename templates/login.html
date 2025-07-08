@@ -1,32 +1,18 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Login - Sistema Coopex</title>
-    <meta charset="UTF-8">
-</head>
-<body>
-    <h1>🔐 Login</h1>
+import os
+from flask import Flask
 
-    {% with messages = get_flashed_messages() %}
-      {% if messages %}
-        <ul>
-          {% for message in messages %}
-            <li style="color: red;">{{ message }}</li>
-          {% endfor %}
-        </ul>
-      {% endif %}
-    {% endwith %}
+class Config:
+    SECRET_KEY = os.environ.get('SECRET_KEY') or 'sua-chave-secreta-aqui'
+    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'postgresql://usuario:senha@host:porta/nome_do_banco'
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+    DEBUG = False
 
-    <form method="POST" action="/login">
-        <label for="usuario">Usuário:</label>
-        <input type="text" id="usuario" name="usuario" required>
-        <br><br>
+app = Flask(__name__)
+app.config.from_object(Config)
 
-        <label for="senha">Senha:</label>
-        <input type="password" id="senha" name="senha" required>
-        <br><br>
+@app.route('/')
+def index():
+    return "Sistema da Cooperativa funcionando!"
 
-        <button type="submit">Entrar</button>
-    </form>
-</body>
-</html>
+if __name__ == "__main__":
+    app.run(debug=True)
