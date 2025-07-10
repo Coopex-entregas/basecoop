@@ -1,5 +1,6 @@
 from flask import request, redirect, url_for, flash, render_template, session
 from models import db, Entrega, Cooperado
+from datetime import datetime
 
 @app.route('/editar_entrega/<int:entrega_id>', methods=['GET', 'POST'])
 def editar_entrega(entrega_id):
@@ -7,48 +8,55 @@ def editar_entrega(entrega_id):
     user_tipo = session.get('usuario_tipo', 'cooperado')  # Ajuste conforme sua sessão
 
     if request.method == 'POST':
-        # Pega dados do formulário (se enviados)
-        descricao = request.form.get('descricao')
-        valor = request.form.get('valor')
-        cooperado_id = request.form.get('cooperado_id')
-        status_pagamento = request.form.get('status_pagamento')
-        status_entrega = request.form.get('status_entrega')
+        try:
+            # Campos opcionais
+            descricao = request.form.get('descricao')
+            valor = request.form.get('valor')
+            cooperado_id = request.form.get('cooperado_id')
+            status_pagamento = request.form.get('status_pagamento')
+            status_entrega = request.form.get('status_entrega')
 
-        # Só altera se for admin
-        if user_tipo == 'adm':
-            if descricao is not None:
-                entrega.descricao = descricao
-            if valor is not None:
-                try:
-                    entrega.valor = float(valor)
-                except ValueError:
-                    flash("Valor inválido.", "error")
-                    return redirect(url_for('editar_entrega', entrega_id=entrega_id))
-            if cooperado_id:
-                if cooperado_id.isdigit():
-                    entrega.cooperado_id = int(cooperado_id)
-                    from datetime import datetime
-                    entrega.hora_atribuida = datetime.utcnow()
+            if user_tipo == 'adm':
+                if descricao is not None and descricao.strip() != '':
+                    entrega.descricao = descricao.strip()
+
+                if valor is not None and valor.strip() != '':
+                    try:
+                        entrega.valor = float(valor)
+                    except ValueError:
+                        flash("Valor inválido. Informe um número válido.", "error")
+                        return redirect(url_for('editar_entrega', entrega_id=entrega_id))
                 else:
-                    entrega.cooperado_id = None
-                    entrega.hora_atribuida = None
+                    entrega.valor = 0.0  # Ou mantem o valor anterior, se preferir
 
-        # Atualiza status de pagamento se enviado
-        if status_pagamento in ['pendente', 'pago']:
-            entrega.status_pagamento = status_pagamento
+                if cooperado_id:
+                    if cooperado_id.isdigit():
+                        entrega.cooperado_id = int(cooperado_id)
+                        entrega.hora_atribuida = datetime.utcnow()
+                    else:
+                        entrega.cooperado_id = None
+                        entrega.hora_atribuida = None
 
-        # Atualiza status de entrega se enviado
-        if status_entrega in ['pendente', 'em rota', 'entregue']:
-            entrega.status_entrega = status_entrega
+            # Atualiza status de pagamento se enviado e válido
+            if status_pagamento in ['pendente', 'pago']:
+                entrega.status_pagamento = status_pagamento
 
-        db.session.commit()
-        flash("Entrega atualizada com sucesso.", "success")
-        # Redireciona para dashboard adequado, por exemplo:
-        if user_tipo == 'adm':
-            return redirect(url_for('dashboard'))
-        else:
-            return redirect(url_for('dashboard_cooperado'))
+            # Atualiza status de entrega se enviado e válido
+            if status_entrega in ['pendente', 'em rota', 'entregue']:
+                entrega.status_entrega = status_entrega
 
-    # GET request - renderiza página de edição
+            db.session.commit()
+            flash("Entrega atualizada com sucesso.", "success")
+
+            if user_tipo == 'adm':
+                return redirect(url_for('dashboard'))
+            else:
+                return redirect(url_for('dashboard_cooperado'))
+
+        except Exception as e:
+            db.session.rollback()
+            flash(f"Erro ao atualizar entrega: {str(e)}", "error")
+            return redirect(url_for('editar_entrega', entrega_id=entrega_id))
+
     cooperados = Cooperado.query.order_by(Cooperado.nome).all() if user_tipo == 'adm' else []
     return render_template('editar_entrega.html', entrega=entrega, cooperados=cooperados, user_tipo=user_tipo)
