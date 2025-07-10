@@ -51,6 +51,7 @@
                     <tr>
                         <th>ID</th>
                         <th>Descrição</th>
+                        <th>Valor</th>  <!-- Coluna Valor adicionada -->
                         <th>Data/Hora</th>
                         <th>Status Pagamento</th>
                         <th>Status Entrega</th>
@@ -62,6 +63,7 @@
                     <tr>
                         <td>#{{ entrega.id }}</td>
                         <td>{{ entrega.descricao }}</td>
+                        <td>R$ {{ "%.2f"|format(entrega.valor or 0) }}</td>  <!-- Valor exibido -->
                         <td>{{ entrega.hora_pedido.strftime('%d/%m/%Y %H:%M') }}</td>
                         <td>
                             <form method="post" action="{{ url_for('editar_entrega', entrega_id=entrega.id) }}">
