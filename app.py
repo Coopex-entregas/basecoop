@@ -1,9 +1,9 @@
 import os
 from flask import Flask, render_template, request, redirect, url_for, session, flash, Response
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, date, time
+from datetime import datetime, date, time, timezone
 from models import db, Usuario, Entrega
-import pytz  # ADICIONADO para fuso horário
+import pytz
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "sua_chave_secreta_aqui")
@@ -15,6 +15,7 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db.init_app(app)
 
+# Função para converter UTC para horário de São Paulo (BRT/BRST)
 def utc_to_brt(value):
     if not value:
         return ''
@@ -79,8 +80,8 @@ def dashboard():
     else:
         data_filtro = date.today()
 
-    inicio_dia = datetime.combine(data_filtro, time.min)
-    fim_dia = datetime.combine(data_filtro, time.max)
+    inicio_dia = datetime.combine(data_filtro, time.min).replace(tzinfo=timezone.utc)
+    fim_dia = datetime.combine(data_filtro, time.max).replace(tzinfo=timezone.utc)
 
     if session["usuario_tipo"] == "adm":
         cooperados = Usuario.query.filter_by(tipo="cooperado").all()
@@ -155,7 +156,7 @@ def cadastrar_entrega():
         hora_str = request.form["hora_pedido"]
         coop_id = request.form.get("cooperado_id")
         try:
-            hora_pedido = datetime.strptime(hora_str, "%Y-%m-%dT%H:%M")
+            hora_pedido = datetime.strptime(hora_str, "%Y-%m-%dT%H:%M").replace(tzinfo=timezone.utc)
         except ValueError:
             flash("Formato de data/hora inválido.", "error")
             return redirect(url_for("cadastrar_entrega"))
@@ -167,7 +168,7 @@ def cadastrar_entrega():
             status_pagamento="pendente",
             status_entrega="pendente",
             cooperado_id=int(coop_id) if coop_id else None,
-            hora_atribuida=datetime.now() if coop_id else None
+            hora_atribuida=datetime.now(timezone.utc) if coop_id else None
         )
         db.session.add(entrega)
         db.session.commit()
@@ -190,13 +191,13 @@ def editar_entrega(entrega_id):
             try:
                 entrega.hora_pedido = datetime.strptime(
                     request.form["hora_pedido"], "%Y-%m-%dT%H:%M"
-                )
+                ).replace(tzinfo=timezone.utc)
             except ValueError:
                 flash("Formato de data/hora inválido.", "error")
                 return redirect(url_for("editar_entrega", entrega_id=entrega_id))
             coop_id = request.form.get("cooperado_id")
             entrega.cooperado_id = int(coop_id) if coop_id else None
-            entrega.hora_atribuida = datetime.now() if coop_id else None
+            entrega.hora_atribuida = datetime.now(timezone.utc) if coop_id else None
             entrega.status_pagamento = request.form["status_pagamento"]
             entrega.status_entrega = request.form["status_entrega"]
         else:
@@ -249,9 +250,6 @@ with app.app_context():
     db.create_all()
     criar_usuario_padrao()
 
-if __name__ == "__main__":
-    app.run(debug=True)
-
 @app.route('/adicionar_entrega', methods=['POST'])
 def adicionar_entrega():
     if 'usuario_id' not in session:
@@ -261,7 +259,7 @@ def adicionar_entrega():
     valor = float(request.form['valor'])
     cooperado_id = request.form['cooperado_id']
     status_pagamento = request.form.get('status_pagamento', 'pendente')
-    hora_pedido = datetime.now()
+    hora_pedido = datetime.now(timezone.utc)
 
     nova = Entrega(
         descricao=descricao,
@@ -273,3 +271,7 @@ def adicionar_entrega():
     db.session.add(nova)
     db.session.commit()
     return redirect(url_for('dashboard'))
+
+if __name__ == "__main__":
+    app.run(debug=True)
+
