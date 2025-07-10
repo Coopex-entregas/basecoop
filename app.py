@@ -5,11 +5,9 @@ from datetime import datetime, date, time, timezone
 from models import db, Usuario, Entrega
 import pytz
 
-# Criação da aplicação Flask
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "sua_chave_secreta_aqui")
 
-# Configurações do banco
 app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
     "DATABASE_URL", "sqlite:///entregas.db"
 )
@@ -17,7 +15,6 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db.init_app(app)
 
-# Função para converter UTC para horário de São Paulo (BRT/BRST)
 def utc_to_brt(value):
     if not value:
         return ''
@@ -43,8 +40,7 @@ def criar_usuario_padrao():
 def proteger_rotas():
     rotas_protegidas = {
         "dashboard", "logout", "cadastrar_cooperado", "excluir_cooperado",
-        "cadastrar_entrega", "editar_entrega", "excluir_entrega", "exportar_entregas",
-        "alterar_fila_espera"
+        "cadastrar_entrega", "editar_entrega", "excluir_entrega", "exportar_entregas"
     }
     if request.endpoint in rotas_protegidas and "usuario_id" not in session:
         flash("Acesso não autorizado. Faça login para continuar.", "error")
@@ -88,14 +84,12 @@ def dashboard():
 
     if session["usuario_tipo"] == "adm":
         cooperados = Usuario.query.filter_by(tipo="cooperado").all()
-        fila_espera = Usuario.query.filter_by(tipo="cooperado", em_fila_espera=True).all()
         entregas = Entrega.query.filter(
             Entrega.hora_pedido >= inicio_dia,
             Entrega.hora_pedido <= fim_dia
         ).order_by(Entrega.hora_pedido.desc()).all()
         return render_template("dashboard_admin.html",
                                cooperados=cooperados,
-                               fila_espera=fila_espera,
                                entregas=entregas,
                                data_filtro=data_filtro_str)
 
@@ -105,23 +99,6 @@ def dashboard():
         Entrega.hora_pedido <= fim_dia
     ).order_by(Entrega.hora_pedido.desc()).all()
     return render_template("dashboard_cooperado.html", entregas=entregas)
-
-@app.route("/alterar_fila_espera/<int:cooperado_id>", methods=["POST"])
-def alterar_fila_espera(cooperado_id):
-    if session.get("usuario_tipo") != "adm":
-        flash("Acesso restrito.", "error")
-        return redirect(url_for("dashboard"))
-
-    cooperado = Usuario.query.filter_by(id=cooperado_id, tipo="cooperado").first()
-    if not cooperado:
-        flash("Cooperado não encontrado.", "error")
-        return redirect(url_for("dashboard"))
-
-    cooperado.em_fila_espera = not cooperado.em_fila_espera
-    db.session.commit()
-    status = "adicionado" if cooperado.em_fila_espera else "removido"
-    flash(f"Cooperado '{cooperado.nome}' {status} da fila de espera.", "success")
-    return redirect(url_for("dashboard"))
 
 @app.route("/logout")
 def logout():

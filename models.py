@@ -9,12 +9,11 @@ class Usuario(db.Model):
     nome = db.Column(db.String(80), unique=True, nullable=False)
     senha_hash = db.Column(db.String(128), nullable=False)
     tipo = db.Column(db.String(20), nullable=False)  # "adm" ou "cooperado"
-    em_fila_espera = db.Column(db.Boolean, default=False, nullable=False)  # Novo campo para fila de espera
 
     entregas = db.relationship("Entrega", backref="cooperado", lazy=True)
 
     def __repr__(self):
-        return f"<Usuario {self.nome} ({self.tipo}) - fila_espera: {self.em_fila_espera}>"
+        return f"<Usuario {self.nome} ({self.tipo})>"
 
 class Entrega(db.Model):
     __tablename__ = "entrega"
