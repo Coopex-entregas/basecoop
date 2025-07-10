@@ -57,7 +57,7 @@
         </div>
 
         <form method="POST" action="{{ url_for('editar_entrega', entrega_id=entrega.id) }}">
-            <!-- Adicione este campo hidden para enviar a hora_pedido no POST -->
+            <!-- Enviar hora_pedido no POST -->
             <input type="hidden" name="hora_pedido" value="{{ entrega.hora_pedido.strftime('%Y-%m-%dT%H:%M') }}">
 
             {% if user_tipo == 'adm' %}
@@ -94,11 +94,10 @@
                 </div>
             {% endif %}
 
-            <!-- Status de Pagamento (apenas para admin) -->
-            {% if user_tipo == 'adm' %}
+            <!-- Status de Pagamento (disponível para ambos) -->
             <div class="form-group">
                 <label for="status_pagamento">Status do Pagamento:</label>
-                <select id="status_pagamento" name="status_pagamento">
+                <select id="status_pagamento" name="status_pagamento" required>
                     <option value="pendente" {% if entrega.status_pagamento == 'pendente' %}selected{% endif %}>
                         💳 Pendente
                     </option>
@@ -107,12 +106,11 @@
                     </option>
                 </select>
             </div>
-            {% endif %}
 
-            <!-- Status de Entrega -->
+            <!-- Status de Entrega (disponível para ambos) -->
             <div class="form-group">
                 <label for="status_entrega">Status da Entrega:</label>
-                <select id="status_entrega" name="status_entrega">
+                <select id="status_entrega" name="status_entrega" required>
                     <option value="pendente" {% if entrega.status_entrega == 'pendente' %}selected{% endif %}>
                         ⏳ Pendente
                     </option>
