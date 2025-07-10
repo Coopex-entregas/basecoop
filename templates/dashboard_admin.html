@@ -35,6 +35,33 @@
 </form>
 
 <div class="content">
+    <!-- Seção de Fila de Espera -->
+    <h2 class="section-title" style="margin-bottom: 20px;">
+        <span style="margin-right: 10px;">⏳</span>
+        Fila de Espera de Cooperados
+    </h2>
+    {% if fila_espera %}
+        <div class="cooperados-list">
+            {% for c in fila_espera %}
+                <div class="cooperado-card" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; background: #fffbe6; padding: 10px; border-radius: 6px; border: 1px solid #f0e68c;">
+                    <div>
+                        <div class="cooperado-name">{{ c.nome }}</div>
+                        <div style="color: #a17c00; font-size: 14px;">
+                            Na fila de espera
+                        </div>
+                    </div>
+                    <form action="{{ url_for('alterar_fila_espera', cooperado_id=c.id) }}" method="POST" onsubmit="return confirm('Remover {{ c.nome }} da fila de espera?')">
+                        <button type="submit" class="btn btn-warning" style="padding: 6px 12px; font-size: 14px;">
+                            Remover da Fila
+                        </button>
+                    </form>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p style="color: #a17c00; margin-bottom: 20px;">Nenhum cooperado na fila de espera no momento.</p>
+    {% endif %}
+
     <!-- Seção de Cooperados -->
     <h2 class="section-title">
         <span style="margin-right: 10px;">👥</span>
@@ -51,11 +78,22 @@
                             Cooperado ativo
                         </div>
                     </div>
-                    <form action="{{ url_for('excluir_cooperado', cooperado_id=c.id) }}" method="POST" onsubmit="return confirm('Tem certeza que deseja excluir o cooperado {{ c.nome }}? Esta ação não pode ser desfeita.')">
-                        <button type="submit" class="btn btn-danger" style="padding: 6px 12px; font-size: 14px;">
-                            Excluir
-                        </button>
-                    </form>
+                    <div style="display: flex; gap: 10px;">
+                        {% if not c.em_fila_espera %}
+                        <form action="{{ url_for('alterar_fila_espera', cooperado_id=c.id) }}" method="POST" onsubmit="return confirm('Adicionar {{ c.nome }} à fila de espera?')">
+                            <button type="submit" class="btn btn-primary" style="padding: 6px 12px; font-size: 14px;">
+                                Adicionar à Fila
+                            </button>
+                        </form>
+                        {% else %}
+                        <span style="color: #a17c00; font-weight: bold; align-self: center;">Na fila de espera</span>
+                        {% endif %}
+                        <form action="{{ url_for('excluir_cooperado', cooperado_id=c.id) }}" method="POST" onsubmit="return confirm('Tem certeza que deseja excluir o cooperado {{ c.nome }}? Esta ação não pode ser desfeita.')">
+                            <button type="submit" class="btn btn-danger" style="padding: 6px 12px; font-size: 14px;">
+                                Excluir
+                            </button>
+                        </form>
+                    </div>
                 </div>
             {% endfor %}
         </div>
