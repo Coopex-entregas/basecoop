@@ -27,6 +27,13 @@
     </div>
 </div>
 
+<!-- Filtro de data -->
+<form method="get" action="{{ url_for('dashboard') }}" style="margin: 20px 0;">
+  <label for="data_filtro">Filtrar por data:</label>
+  <input type="date" id="data_filtro" name="data_filtro" value="{{ data_filtro or '' }}">
+  <button type="submit">Filtrar</button>
+</form>
+
 <div class="content">
 
     <!-- Seção de Cooperados -->
