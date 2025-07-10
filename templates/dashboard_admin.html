@@ -1,32 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard Admin - Coopex
-<h3>Adicionar Entrega</h3>
-<form method="post" action="{{ url_for('adicionar_entrega') }}">
-    <label for="descricao">Descrição:</label>
-    <input type="text" name="descricao" required>
-
-    <label for="valor">Valor:</label>
-    <input type="number" step="0.01" name="valor" required>
-
-    <label for="cooperado_id">Cooperado:</label>
-    <select name="cooperado_id" required>
-        {% for cooperado in cooperados %}
-        <option value="{{ cooperado.id }}">{{ cooperado.nome }}</option>
-        {% endfor %}
-    </select>
-
-    <label for="status_pagamento">Status Pagamento:</label>
-    <select name="status_pagamento">
-        <option value="pendente">Pendente</option>
-        <option value="pago">Pago</option>
-    </select>
-
-    <button type="submit">Adicionar Entrega</button>
-</form>
-
-{% endblock %}
-
+{% block title %}Dashboard Admin - Coopex{% endblock %}
 
 {% block content %}
 <div class="header">
@@ -92,6 +66,13 @@
         <span style="margin-right: 10px;">📦</span>
         Gestão de Entregas
     </h2>
+
+    <!-- Formulário de filtro por data -->
+    <form method="GET" action="{{ url_for('dashboard') }}" style="margin-bottom: 20px;">
+        <label for="data_filtro">Filtrar por data:</label>
+        <input type="date" id="data_filtro" name="data_filtro" value="{{ data_filtro or '' }}">
+        <button type="submit">Filtrar</button>
+    </form>
     
     {% if entregas %}
         <div class="table-container">

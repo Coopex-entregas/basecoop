@@ -3,22 +3,33 @@ from flask import Flask, render_template, request, redirect, url_for, session, f
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, time
 from models import db, Usuario, Entrega
+import pytz  # ADICIONADO para fuso horário
 
-# Cria a aplicação Flask
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "sua_chave_secreta_aqui")
 
-# Conexão com o banco (SQLite para desenvolvimento; use DATABASE_URL no prod)
 app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
     "DATABASE_URL", "sqlite:///entregas.db"
 )
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-# Inicializa o SQLAlchemy
 db.init_app(app)
 
+def utc_to_brt(value):
+    if not value:
+        return ''
+    utc = pytz.utc
+    brt = pytz.timezone('America/Sao_Paulo')
+    if value.tzinfo is None:
+        value_utc = utc.localize(value)
+    else:
+        value_utc = value
+    value_brt = value_utc.astimezone(brt)
+    return value_brt.strftime('%d/%m/%Y %H:%M')
+
+app.jinja_env.filters['utc_to_brt'] = utc_to_brt
+
 def criar_usuario_padrao():
-    """Garante que exista um usuário admin padrão."""
     if not Usuario.query.filter_by(nome="coopex").first():
         senha_hash = generate_password_hash("05062721")
         user = Usuario(nome="coopex", senha_hash=senha_hash, tipo="adm")
@@ -27,7 +38,6 @@ def criar_usuario_padrao():
 
 @app.before_request
 def proteger_rotas():
-    """Redireciona para login se estiver acessando rota protegida sem sessão."""
     rotas_protegidas = {
         "dashboard", "logout", "cadastrar_cooperado", "excluir_cooperado",
         "cadastrar_entrega", "editar_entrega", "excluir_entrega", "exportar_entregas"
@@ -58,9 +68,19 @@ def login():
 
 @app.route("/dashboard")
 def dashboard():
-    hoje = date.today()
-    inicio_dia = datetime.combine(hoje, time.min)
-    fim_dia = datetime.combine(hoje, time.max)
+    data_filtro_str = request.args.get('data_filtro')
+
+    if data_filtro_str:
+        try:
+            data_filtro = datetime.strptime(data_filtro_str, '%Y-%m-%d').date()
+        except ValueError:
+            flash("Data inválida para filtro.", "error")
+            return redirect(url_for("dashboard"))
+    else:
+        data_filtro = date.today()
+
+    inicio_dia = datetime.combine(data_filtro, time.min)
+    fim_dia = datetime.combine(data_filtro, time.max)
 
     if session["usuario_tipo"] == "adm":
         cooperados = Usuario.query.filter_by(tipo="cooperado").all()
@@ -70,7 +90,8 @@ def dashboard():
         ).order_by(Entrega.hora_pedido.desc()).all()
         return render_template("dashboard_admin.html",
                                cooperados=cooperados,
-                               entregas=entregas)
+                               entregas=entregas,
+                               data_filtro=data_filtro_str)
 
     entregas = Entrega.query.filter(
         Entrega.cooperado_id == session["usuario_id"],
@@ -158,9 +179,7 @@ def cadastrar_entrega():
 @app.route("/editar_entrega/<int:entrega_id>", methods=["GET", "POST"])
 def editar_entrega(entrega_id):
     entrega = Entrega.query.get_or_404(entrega_id)
-    # Verifica permissão
-    if (session["usuario_tipo"] == "cooperado" and
-            entrega.cooperado_id != session["usuario_id"]):
+    if (session["usuario_tipo"] == "cooperado" and entrega.cooperado_id != session["usuario_id"]):
         flash("Permissão negada.", "error")
         return redirect(url_for("dashboard"))
 
@@ -226,12 +245,10 @@ def exportar_entregas():
         headers={"Content-Disposition": "attachment; filename=entregas.csv"}
     )
 
-# Execução de criação de tabelas e usuário padrão sempre que o módulo for importado
 with app.app_context():
     db.create_all()
     criar_usuario_padrao()
 
-# Permite rodar localmente com python app.py
 if __name__ == "__main__":
     app.run(debug=True)
 
