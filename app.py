@@ -1,158 +1,258 @@
-
-from flask import Flask, render_template, request, redirect, url_for, session, flash
-from flask_sqlalchemy import SQLAlchemy
+import os
+from flask import Flask, render_template, request, redirect, url_for, session, flash, Response
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime
+from datetime import datetime, date, time
+from models import db, Usuario, Entrega
 
+# Cria a aplicação Flask
 app = Flask(__name__)
-app.secret_key = "sua_chave_secreta"
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///entregas.db"
+app.secret_key = os.environ.get("SECRET_KEY", "sua_chave_secreta_aqui")
+
+# Conexão com o banco (SQLite para desenvolvimento; use DATABASE_URL no prod)
+app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
+    "DATABASE_URL", "sqlite:///entregas.db"
+)
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-db = SQLAlchemy(app)
 
-class Usuario(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    nome = db.Column(db.String(80), unique=True, nullable=False)
-    senha_hash = db.Column(db.String(128), nullable=False)
-    tipo = db.Column(db.String(10), nullable=False)  # 'adm' ou 'cooperado'
+# Inicializa o SQLAlchemy
+db.init_app(app)
 
-class Entrega(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    descricao = db.Column(db.String(200), nullable=False)
-    hora_pedido = db.Column(db.DateTime, nullable=False)
-    hora_atribuida = db.Column(db.DateTime, nullable=True)
-    status_pagamento = db.Column(db.String(20), default="pendente")  # pendente ou pago
-    status_entrega = db.Column(db.String(20), default="pendente")    # pendente, em rota, entregue
-    cooperado_id = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=True)
-    cooperado = db.relationship('Usuario')
-
-@app.before_first_request
-def criar_admin():
-    admin = Usuario.query.filter_by(nome="coopex").first()
-    if not admin:
+def criar_usuario_padrao():
+    """Garante que exista um usuário admin padrão."""
+    if not Usuario.query.filter_by(nome="coopex").first():
         senha_hash = generate_password_hash("05062721")
-        admin = Usuario(nome="coopex", senha_hash=senha_hash, tipo="adm")
-        db.session.add(admin)
+        user = Usuario(nome="coopex", senha_hash=senha_hash, tipo="adm")
+        db.session.add(user)
         db.session.commit()
 
-@app.route("/", methods=["GET", "POST"])
+@app.before_request
+def proteger_rotas():
+    """Redireciona para login se estiver acessando rota protegida sem sessão."""
+    rotas_protegidas = {
+        "dashboard", "logout", "cadastrar_cooperado", "excluir_cooperado",
+        "cadastrar_entrega", "editar_entrega", "excluir_entrega", "exportar_entregas"
+    }
+    if request.endpoint in rotas_protegidas and "usuario_id" not in session:
+        flash("Acesso não autorizado. Faça login para continuar.", "error")
+        return redirect(url_for("login"))
+
+@app.route("/")
+def index():
+    return redirect(url_for("login"))
+
+@app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
         nome = request.form["nome"]
         senha = request.form["senha"]
-        user = Usuario.query.filter_by(nome=nome).first()
-        if user and check_password_hash(user.senha_hash, senha):
-            session["user_id"] = user.id
-            session["user_nome"] = user.nome
-            session["user_tipo"] = user.tipo
+        usuario = Usuario.query.filter_by(nome=nome).first()
+        if usuario and check_password_hash(usuario.senha_hash, senha):
+            session["usuario_id"] = usuario.id
+            session["usuario_nome"] = usuario.nome
+            session["usuario_tipo"] = usuario.tipo
+            flash("Login efetuado com sucesso!", "success")
             return redirect(url_for("dashboard"))
-        else:
-            flash("Usuário ou senha inválidos.")
-            return redirect(url_for("login"))
+        flash("Usuário ou senha incorretos.", "error")
+        return redirect(url_for("login"))
     return render_template("login.html")
+
+@app.route("/dashboard")
+def dashboard():
+    hoje = date.today()
+    inicio_dia = datetime.combine(hoje, time.min)
+    fim_dia = datetime.combine(hoje, time.max)
+
+    if session["usuario_tipo"] == "adm":
+        cooperados = Usuario.query.filter_by(tipo="cooperado").all()
+        entregas = Entrega.query.filter(
+            Entrega.hora_pedido >= inicio_dia,
+            Entrega.hora_pedido <= fim_dia
+        ).order_by(Entrega.hora_pedido.desc()).all()
+        return render_template("dashboard_admin.html",
+                               cooperados=cooperados,
+                               entregas=entregas)
+
+    entregas = Entrega.query.filter(
+        Entrega.cooperado_id == session["usuario_id"],
+        Entrega.hora_pedido >= inicio_dia,
+        Entrega.hora_pedido <= fim_dia
+    ).order_by(Entrega.hora_pedido.desc()).all()
+    return render_template("dashboard_cooperado.html", entregas=entregas)
 
 @app.route("/logout")
 def logout():
     session.clear()
+    flash("Logout realizado com sucesso.", "success")
     return redirect(url_for("login"))
-
-@app.route("/dashboard")
-def dashboard():
-    if "user_id" not in session:
-        return redirect(url_for("login"))
-    if session["user_tipo"] == "adm":
-        cooperados = Usuario.query.filter_by(tipo="cooperado").all()
-        entregas = Entrega.query.order_by(Entrega.hora_pedido.desc()).all()
-        return render_template("admin.html", cooperados=cooperados, entregas=entregas)
-    else:
-        entregas = Entrega.query.filter_by(cooperado_id=session["user_id"]).order_by(Entrega.hora_pedido.desc()).all()
-        return render_template("cooperado.html", entregas=entregas)
 
 @app.route("/cadastrar_cooperado", methods=["GET", "POST"])
 def cadastrar_cooperado():
-    if "user_tipo" not in session or session["user_tipo"] != "adm":
-        return redirect(url_for("login"))
+    if session.get("usuario_tipo") != "adm":
+        flash("Acesso restrito a administradores.", "error")
+        return redirect(url_for("dashboard"))
+
     if request.method == "POST":
         nome = request.form["nome"]
         senha = request.form["senha"]
         if Usuario.query.filter_by(nome=nome).first():
-            flash("Cooperado já existe!")
+            flash("Nome já cadastrado, escolha outro.", "error")
             return redirect(url_for("cadastrar_cooperado"))
         senha_hash = generate_password_hash(senha)
-        cooperado = Usuario(nome=nome, senha_hash=senha_hash, tipo="cooperado")
-        db.session.add(cooperado)
+        novo = Usuario(nome=nome, senha_hash=senha_hash, tipo="cooperado")
+        db.session.add(novo)
         db.session.commit()
-        flash("Cooperado cadastrado com sucesso!")
+        flash("Cooperado cadastrado com sucesso!", "success")
         return redirect(url_for("dashboard"))
     return render_template("cadastrar_cooperado.html")
 
+@app.route("/excluir_cooperado/<int:cooperado_id>", methods=["POST"])
+def excluir_cooperado(cooperado_id):
+    if session.get("usuario_tipo") != "adm":
+        flash("Acesso restrito.", "error")
+        return redirect(url_for("dashboard"))
+
+    coop = Usuario.query.filter_by(id=cooperado_id, tipo="cooperado").first()
+    if not coop:
+        flash("Cooperado não encontrado.", "error")
+        return redirect(url_for("dashboard"))
+    Entrega.query.filter_by(cooperado_id=coop.id).delete()
+    db.session.delete(coop)
+    db.session.commit()
+    flash(f"Cooperado '{coop.nome}' excluído com sucesso!", "success")
+    return redirect(url_for("dashboard"))
+
 @app.route("/cadastrar_entrega", methods=["GET", "POST"])
 def cadastrar_entrega():
-    if "user_tipo" not in session or session["user_tipo"] != "adm":
-        return redirect(url_for("login"))
+    if session.get("usuario_tipo") != "adm":
+        flash("Acesso restrito.", "error")
+        return redirect(url_for("dashboard"))
+
     cooperados = Usuario.query.filter_by(tipo="cooperado").all()
     if request.method == "POST":
-        descricao = request.form["descricao"]
-        hora_pedido_str = request.form["hora_pedido"]
-        cooperado_id = request.form.get("cooperado_id")
-        hora_pedido = datetime.strptime(hora_pedido_str, "%Y-%m-%dT%H:%M")
-        entrega = Entrega(descricao=descricao, hora_pedido=hora_pedido, status_pagamento="pendente", status_entrega="pendente")
-        if cooperado_id and cooperado_id != "":
-            entrega.cooperado_id = int(cooperado_id)
-            entrega.hora_atribuida = datetime.now()
+        descricao = request.form["cliente"]
+        valor = request.form.get("valor", type=float)
+        hora_str = request.form["hora_pedido"]
+        coop_id = request.form.get("cooperado_id")
+        try:
+            hora_pedido = datetime.strptime(hora_str, "%Y-%m-%dT%H:%M")
+        except ValueError:
+            flash("Formato de data/hora inválido.", "error")
+            return redirect(url_for("cadastrar_entrega"))
+
+        entrega = Entrega(
+            descricao=descricao,
+            valor=valor,
+            hora_pedido=hora_pedido,
+            status_pagamento="pendente",
+            status_entrega="pendente",
+            cooperado_id=int(coop_id) if coop_id else None,
+            hora_atribuida=datetime.now() if coop_id else None
+        )
         db.session.add(entrega)
         db.session.commit()
-        flash("Entrega cadastrada com sucesso!")
+        flash("Entrega cadastrada com sucesso!", "success")
         return redirect(url_for("dashboard"))
+
     return render_template("cadastrar_entrega.html", cooperados=cooperados)
 
 @app.route("/editar_entrega/<int:entrega_id>", methods=["GET", "POST"])
 def editar_entrega(entrega_id):
-    if "user_id" not in session:
-        return redirect(url_for("login"))
     entrega = Entrega.query.get_or_404(entrega_id)
-    user_tipo = session["user_tipo"]
-    user_id = session["user_id"]
-
-    if user_tipo == "cooperado" and entrega.cooperado_id != user_id:
-        flash("Você não pode editar essa entrega.")
+    # Verifica permissão
+    if (session["usuario_tipo"] == "cooperado" and
+            entrega.cooperado_id != session["usuario_id"]):
+        flash("Permissão negada.", "error")
         return redirect(url_for("dashboard"))
 
     if request.method == "POST":
-        if user_tipo == "cooperado":
-            status_pag = request.form.get("status_pagamento")
-            status_ent = request.form.get("status_entrega")
-            if status_pag in ["pendente", "pago"]:
-                entrega.status_pagamento = status_pag
-            if status_ent in ["pendente", "em rota", "entregue"]:
-                entrega.status_entrega = status_ent
-            db.session.commit()
-            flash("Status atualizado.")
-            return redirect(url_for("dashboard"))
-        elif user_tipo == "adm":
-            descricao = request.form["descricao"]
-            cooperado_id = request.form.get("cooperado_id")
-            status_pag = request.form.get("status_pagamento")
-            status_ent = request.form.get("status_entrega")
-            entrega.descricao = descricao
-            if cooperado_id and cooperado_id != "":
-                entrega.cooperado_id = int(cooperado_id)
-                entrega.hora_atribuida = datetime.now()
-            else:
-                entrega.cooperado_id = None
-                entrega.hora_atribuida = None
-            if status_pag in ["pendente", "pago"]:
-                entrega.status_pagamento = status_pag
-            if status_ent in ["pendente", "em rota", "entregue"]:
-                entrega.status_entrega = status_ent
-            db.session.commit()
-            flash("Entrega atualizada.")
-            return redirect(url_for("dashboard"))
+        if session["usuario_tipo"] == "adm":
+            entrega.descricao = request.form["descricao"]
+            entrega.valor = request.form.get("valor", type=float)
+            try:
+                entrega.hora_pedido = datetime.strptime(
+                    request.form["hora_pedido"], "%Y-%m-%dT%H:%M"
+                )
+            except ValueError:
+                flash("Formato de data/hora inválido.", "error")
+                return redirect(url_for("editar_entrega", entrega_id=entrega_id))
+            coop_id = request.form.get("cooperado_id")
+            entrega.cooperado_id = int(coop_id) if coop_id else None
+            entrega.hora_atribuida = datetime.now() if coop_id else None
+            entrega.status_pagamento = request.form["status_pagamento"]
+            entrega.status_entrega = request.form["status_entrega"]
+        else:
+            entrega.status_pagamento = request.form["status_pagamento"]
+            entrega.status_entrega = request.form["status_entrega"]
+        db.session.commit()
+        flash("Entrega atualizada com sucesso!", "success")
+        return redirect(url_for("dashboard"))
 
-    cooperados = Usuario.query.filter_by(tipo="cooperado").all()
-    return render_template("editar_entrega.html", entrega=entrega, cooperados=cooperados, user_tipo=user_tipo)
+    cooperados = (Usuario.query.filter_by(tipo="cooperado").all()
+                  if session["usuario_tipo"] == "adm" else [])
+    return render_template("editar_entrega.html",
+                           entrega=entrega,
+                           cooperados=cooperados,
+                           user_tipo=session["usuario_tipo"])
 
+@app.route("/excluir_entrega/<int:entrega_id>", methods=["POST"])
+def excluir_entrega(entrega_id):
+    if session.get("usuario_tipo") != "adm":
+        flash("Acesso restrito.", "error")
+        return redirect(url_for("dashboard"))
+    entrega = Entrega.query.get_or_404(entrega_id)
+    db.session.delete(entrega)
+    db.session.commit()
+    flash(f"Entrega #{entrega_id} excluída com sucesso!", "success")
+    return redirect(url_for("dashboard"))
+
+@app.route("/exportar_entregas")
+def exportar_entregas():
+    if session.get("usuario_tipo") != "adm":
+        flash("Acesso restrito.", "error")
+        return redirect(url_for("dashboard"))
+    entregas = Entrega.query.all()
+
+    def gerar_csv():
+        yield "\ufeff"
+        yield "ID,Descrição,Valor,Status Pagamento,Status Entrega,Hora Pedido,Hora Atribuída\n"
+        for e in entregas:
+            yield f'{e.id},"{e.descricao}",{e.valor},' \
+                  f'{e.status_pagamento},{e.status_entrega},' \
+                  f'{e.hora_pedido},{e.hora_atribuida or ""}\n'
+
+    return Response(
+        gerar_csv(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=entregas.csv"}
+    )
+
+# Execução de criação de tabelas e usuário padrão sempre que o módulo for importado
+with app.app_context():
+    db.create_all()
+    criar_usuario_padrao()
+
+# Permite rodar localmente com python app.py
 if __name__ == "__main__":
-    with app.app_context():
-        db.create_all()
     app.run(debug=True)
+
+@app.route('/adicionar_entrega', methods=['POST'])
+def adicionar_entrega():
+    if 'usuario_id' not in session:
+        return redirect(url_for('login'))
+
+    descricao = request.form['descricao']
+    valor = float(request.form['valor'])
+    cooperado_id = request.form['cooperado_id']
+    status_pagamento = request.form.get('status_pagamento', 'pendente')
+    hora_pedido = datetime.now()
+
+    nova = Entrega(
+        descricao=descricao,
+        valor=valor,
+        cooperado_id=cooperado_id,
+        status_pagamento=status_pagamento,
+        hora_pedido=hora_pedido
+    )
+    db.session.add(nova)
+    db.session.commit()
+    return redirect(url_for('dashboard'))
