@@ -17,12 +17,15 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db.init_app(app)
 
+# Timezones
+utc = pytz.utc
+brt = pytz.timezone('America/Sao_Paulo')
+
 def utc_to_brt(value):
     if not value:
         return ''
-    utc = pytz.utc
-    brt = pytz.timezone('America/Sao_Paulo')
     if value.tzinfo is None:
+        # Se datetime sem timezone, assume UTC
         value_utc = utc.localize(value)
     else:
         value_utc = value
@@ -81,8 +84,9 @@ def dashboard():
     else:
         data_filtro = date.today()
 
-    inicio_dia = datetime.combine(data_filtro, time.min).replace(tzinfo=timezone.utc)
-    fim_dia = datetime.combine(data_filtro, time.max).replace(tzinfo=timezone.utc)
+    # intervalo UTC do dia filtrado
+    inicio_dia = datetime.combine(data_filtro, time.min).replace(tzinfo=utc)
+    fim_dia = datetime.combine(data_filtro, time.max).replace(tzinfo=utc)
 
     if session["usuario_tipo"] == "adm":
         cooperados = Usuario.query.filter_by(tipo="cooperado").all()
@@ -157,7 +161,8 @@ def cadastrar_entrega():
         hora_str = request.form["hora_pedido"]
         coop_id = request.form.get("cooperado_id")
         try:
-            hora_pedido = datetime.strptime(hora_str, "%Y-%m-%dT%H:%M").replace(tzinfo=timezone.utc)
+            # sempre grava como UTC
+            hora_pedido = datetime.strptime(hora_str, "%Y-%m-%dT%H:%M").replace(tzinfo=utc)
         except ValueError:
             flash("Formato de data/hora inválido.", "error")
             return redirect(url_for("cadastrar_entrega"))
@@ -169,7 +174,7 @@ def cadastrar_entrega():
             status_pagamento="pendente",
             status_entrega="pendente",
             cooperado_id=int(coop_id) if coop_id else None,
-            hora_atribuida=datetime.now(timezone.utc) if coop_id else None
+            hora_atribuida=datetime.now(utc) if coop_id else None
         )
         db.session.add(entrega)
         db.session.commit()
@@ -192,13 +197,13 @@ def editar_entrega(entrega_id):
             try:
                 entrega.hora_pedido = datetime.strptime(
                     request.form["hora_pedido"], "%Y-%m-%dT%H:%M"
-                ).replace(tzinfo=timezone.utc)
+                ).replace(tzinfo=utc)
             except ValueError:
                 flash("Formato de data/hora inválido.", "error")
                 return redirect(url_for("editar_entrega", entrega_id=entrega_id))
             coop_id = request.form.get("cooperado_id")
             entrega.cooperado_id = int(coop_id) if coop_id else None
-            entrega.hora_atribuida = datetime.now(timezone.utc) if coop_id else None
+            entrega.hora_atribuida = datetime.now(utc) if coop_id else None
             entrega.status_pagamento = request.form["status_pagamento"]
             entrega.status_entrega = request.form["status_entrega"]
         else:
