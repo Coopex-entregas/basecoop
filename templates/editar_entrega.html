@@ -1,62 +1,66 @@
-from flask import request, redirect, url_for, flash, render_template, session
-from models import db, Entrega, Usuario
-from datetime import datetime
-import pytz
+{% extends "base.html" %}
 
-@app.route('/editar_entrega/<int:entrega_id>', methods=['GET', 'POST'])
-def editar_entrega(entrega_id):
-    entrega = Entrega.query.get_or_404(entrega_id)
-    user_tipo = session.get('usuario_tipo', 'cooperado')
+{% block title %}Editar Entrega{% endblock %}
 
-    # Permissão para cooperado editar só suas entregas
-    if user_tipo == 'cooperado' and entrega.cooperado_id != session.get('usuario_id'):
-        flash("Permissão negada.", "error")
-        return redirect(url_for('dashboard_cooperado'))
+{% block content %}
+<div class="header">
+    <h1>Editar Entrega #{{ entrega.id }}</h1>
+    <p style="color: #718096;">Preencha os campos abaixo para atualizar a entrega.</p>
+</div>
 
-    if request.method == 'POST':
-        status_pagamento = request.form.get('status_pagamento')
-        status_entrega = request.form.get('status_entrega')
+<div class="content">
+    <form method="POST">
+        {% if user_tipo == 'adm' %}
+        <!-- Campos visíveis apenas para ADMIN -->
+        <div class="form-group">
+            <label for="descricao">Descrição (Cliente)</label>
+            <input type="text" id="descricao" name="descricao" value="{{ entrega.descricao }}" required>
+        </div>
 
-        if user_tipo == 'adm':
-            entrega.descricao = request.form.get('descricao', entrega.descricao)
-            valor = request.form.get('valor')
-            try:
-                entrega.valor = float(valor)
-            except (ValueError, TypeError):
-                entrega.valor = 0
+        <div class="form-group">
+            <label for="valor">Valor (R$)</label>
+            <input type="number" step="0.01" id="valor" name="valor" value="{{ entrega.valor or 0 }}" required>
+        </div>
 
-            hora_pedido_str = request.form.get('hora_pedido')
-            if hora_pedido_str:
-                try:
-                    brt = pytz.timezone('America/Sao_Paulo')
-                    hora_local = datetime.strptime(hora_pedido_str, "%Y-%m-%dT%H:%M")
-                    hora_brt = brt.localize(hora_local)
-                    entrega.hora_pedido = hora_brt.astimezone(pytz.utc)
-                except ValueError:
-                    flash("Formato de data/hora inválido.", "error")
-                    return redirect(url_for('editar_entrega', entrega_id=entrega_id))
+        <div class="form-group">
+            <label for="hora_pedido">Hora do Pedido</label>
+            <input type="datetime-local" id="hora_pedido" name="hora_pedido"
+                value="{{ entrega.hora_pedido|utc_to_brt|replace('/', '-')|replace(' ', 'T') }}">
+        </div>
 
-            cooperado_id = request.form.get('cooperado_id')
-            if cooperado_id and cooperado_id.isdigit():
-                entrega.cooperado_id = int(cooperado_id)
-                entrega.hora_atribuida = datetime.utcnow()
-            else:
-                entrega.cooperado_id = None
-                entrega.hora_atribuida = None
+        <div class="form-group">
+            <label for="cooperado_id">Atribuir a Cooperado</label>
+            <select name="cooperado_id" id="cooperado_id">
+                <option value="">Não atribuído</option>
+                {% for c in cooperados %}
+                    <option value="{{ c.id }}" {% if entrega.cooperado_id == c.id %}selected{% endif %}>{{ c.nome }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        {% endif %}
 
-        # Ambos podem alterar status
-        if status_pagamento in ['pendente', 'pago']:
-            entrega.status_pagamento = status_pagamento
-        if status_entrega in ['pendente', 'em rota', 'entregue']:
-            entrega.status_entrega = status_entrega
+        <!-- Campos visíveis para ambos -->
+        <div class="form-group">
+            <label for="status_pagamento">Status Pagamento</label>
+            <select name="status_pagamento" id="status_pagamento" required>
+                <option value="pendente" {% if entrega.status_pagamento == 'pendente' %}selected{% endif %}>Pendente</option>
+                <option value="pago" {% if entrega.status_pagamento == 'pago' %}selected{% endif %}>Pago</option>
+            </select>
+        </div>
 
-        db.session.commit()
-        flash("Entrega atualizada com sucesso.", "success")
+        <div class="form-group">
+            <label for="status_entrega">Status Entrega</label>
+            <select name="status_entrega" id="status_entrega" required>
+                <option value="pendente" {% if entrega.status_entrega == 'pendente' %}selected{% endif %}>Pendente</option>
+                <option value="em rota" {% if entrega.status_entrega == 'em rota' %}selected{% endif %}>Em Rota</option>
+                <option value="entregue" {% if entrega.status_entrega == 'entregue' %}selected{% endif %}>Entregue</option>
+            </select>
+        </div>
 
-        if user_tipo == 'adm':
-            return redirect(url_for('dashboard'))
-        else:
-            return redirect(url_for('dashboard_cooperado'))
-
-    cooperados = Usuario.query.filter_by(tipo='cooperado').order_by(Usuario.nome).all() if user_tipo == 'adm' else []
-    return render_template('editar_entrega.html', entrega=entrega, cooperados=cooperados, user_tipo=user_tipo)
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Salvar Alterações</button>
+            <a href="{{ url_for('dashboard_admin' if user_tipo == 'adm' else 'dashboard_cooperado') }}" class="btn">Cancelar</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
