@@ -1,84 +1,35 @@
-<!DOCTYPE html>
-<html lang="pt-br">
-<head>
-    <meta charset="UTF-8">
-    <title>Painel Administrativo - Coopex</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <style>
-        body {
-            background-color: #f7fafc; /* fundo suave */
-            color: #2d3748;
-            font-family: Arial, sans-serif;
-            margin: 20px;
-        }
+{% extends "base.html" %}
 
-        h1, h2, h3 {
-            color: #2d3748;
-        }
+{% block title %}Painel Administrativo - Coopex{% endblock %}
 
-        a {
-            text-decoration: none;
-            color: #2d3748;
-        }
+{% block content %}
+<div class="header">
+    <h1>Painel Administrativo COOPEX</h1>
+    <p style="color: #718096; margin-bottom: 20px;">Bem-vindo, {{ session['usuario_nome'] }}!</p>
+    
+    <div class="nav-links">
+        <a href="{{ url_for('cadastrar_cooperado') }}">
+            <span style="margin-right: 8px;">👤</span>
+            Cadastrar Cooperado
+        </a>
+        <a href="{{ url_for('cadastrar_entrega') }}">
+            <span style="margin-right: 8px;">📦</span>
+            Nova Entrega
+        </a>
+        <a href="{{ url_for('exportar_entregas') }}" class="btn" style="margin-left: 10px;">
+            <span style="margin-right: 8px;">📊</span>
+            Exportar Entregas
+        </a>
+        <a href="{{ url_for('logout') }}" class="logout">
+            <span style="margin-right: 8px;">🚪</span>
+            Sair
+        </a>
+    </div>
+</div>
 
-        .btn {
-            background-color: #4a5568;
-            color: #fff !important;
-            padding: 6px 12px;
-            border: none;
-            border-radius: 4px;
-            font-size: 14px;
-            cursor: pointer;
-            text-decoration: none;
-        }
-
-        .btn:hover {
-            background-color: #2d3748;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 15px;
-        }
-
-        th, td {
-            padding: 10px;
-            border: 1px solid #e2e8f0;
-            text-align: left;
-        }
-
-        th {
-            background-color: #edf2f7;
-        }
-
-        hr {
-            margin: 30px 0;
-            border: none;
-            border-top: 1px solid #ccc;
-        }
-
-        ul {
-            list-style: none;
-            padding-left: 0;
-        }
-
-        ul li {
-            padding: 5px 0;
-        }
-
-        .status {
-            color: #718096;
-        }
-    </style>
-</head>
-<body>
-
-    <h1>Painel Administrativo</h1>
-
-    <p style="color: #718096;">Olá, {{ session['usuario_nome'] }} | <a href="{{ url_for('logout') }}">Sair</a></p>
-
-    <h2>📊 Estatísticas</h2>
+<!-- Estatísticas -->
+<section style="margin: 20px 0; padding: 10px; background-color: #f7fafc; border-radius: 8px;">
+    <h2>📊 Estatísticas Gerais</h2>
     <p><strong>Total de entregas hoje:</strong> {{ total_dia }}</p>
     <p><strong>Total de entregas no ano:</strong> {{ total_entregas_ano }}</p>
     <p><strong>Total ganho no mês:</strong> R$ {{ '%.2f' % total_valor_mes }}</p>
@@ -91,33 +42,32 @@
             {% endfor %}
         </ul>
     {% else %}
-        <p style="color: #718096;">Nenhum ganho registrado este mês.</p>
+        <p>Nenhum ganho registrado este mês.</p>
     {% endif %}
+</section>
 
-    <hr>
+<!-- Filtro de data -->
+<form method="get" action="{{ url_for('dashboard') }}" style="margin: 20px 0;">
+  <label for="data_filtro">Filtrar por data:</label>
+  <input type="date" id="data_filtro" name="data_filtro" value="{{ data_filtro or '' }}">
+  <button type="submit">Filtrar</button>
+</form>
 
-    <form method="get" action="{{ url_for('dashboard') }}">
-        <label for="data_filtro">Filtrar por data:</label>
-        <input type="date" id="data_filtro" name="data_filtro" value="{{ data_filtro or '' }}">
-        <button type="submit" class="btn">Filtrar</button>
-    </form>
+<!-- Seção de Entregas -->
+<h2 class="section-title" style="margin-top: 40px;">
+    <span style="margin-right: 10px;">📦</span>
+    Entregas do Dia
+</h2>
 
-    <hr>
-
-    <a href="{{ url_for('cadastrar_entrega') }}" class="btn">➕ Nova Entrega</a>
-    <a href="{{ url_for('cadastrar_cooperado') }}" class="btn">👤 Cadastrar Cooperado</a>
-    <a href="{{ url_for('exportar_entregas') }}" class="btn">📥 Exportar Entregas</a>
-
-    <hr>
-
-    <h2>📦 Entregas do Dia</h2>
-    {% if entregas %}
+{% if entregas %}
+    <div class="table-container">
         <table>
             <thead>
                 <tr>
+                    <th>ID</th>
                     <th>Descrição</th>
                     <th>Valor</th>
-                    <th>Horário Pedido</th>
+                    <th>Hora do Pedido</th>
                     <th>Cooperado</th>
                     <th>Status Pagamento</th>
                     <th>Status Entrega</th>
@@ -127,37 +77,44 @@
             <tbody>
                 {% for entrega in entregas %}
                 <tr>
+                    <td><strong>#{{ entrega.id }}</strong></td>
                     <td>{{ entrega.descricao }}</td>
-                    <td>R$ {{ '%.2f' % entrega.valor }}</td>
+                    <td><strong>R$ {{ '%.2f' % (entrega.valor or 0) }}</strong></td>
                     <td>{{ entrega.hora_pedido|utc_to_brt }}</td>
                     <td>{{ entrega.cooperado.nome if entrega.cooperado else '---' }}</td>
                     <td>{{ entrega.status_pagamento }}</td>
                     <td>{{ entrega.status_entrega }}</td>
                     <td>
                         <a href="{{ url_for('editar_entrega', entrega_id=entrega.id) }}" class="btn">✏️</a>
-                        <a href="{{ url_for('excluir_entrega', entrega_id=entrega.id) }}"
-                           onclick="return confirm('Tem certeza que deseja excluir?')" class="btn">❌</a>
+                        <form action="{{ url_for('excluir_entrega', entrega_id=entrega.id) }}" method="POST" style="display: inline;" onsubmit="return confirm('Tem certeza que deseja excluir a entrega #{{ entrega.id }}?')">
+                            <button type="submit" class="btn btn-danger">❌</button>
+                        </form>
                     </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
-    {% else %}
-        <p style="color: #718096;">🚫 Nenhuma entrega registrada para este dia.</p>
-    {% endif %}
+    </div>
+{% else %}
+    <div style="text-align: center; padding: 40px; color: #718096;">
+        <p>🚫 Nenhuma entrega registrada para este dia.</p>
+        <a href="{{ url_for('cadastrar_entrega') }}" class="btn" style="margin-top: 15px;">Cadastrar Primeira Entrega</a>
+    </div>
+{% endif %}
 
-    <hr>
+<!-- Seção Motoboys em Espera -->
+<h2 class="section-title" style="margin-top: 40px;">
+    <span style="margin-right: 10px;">🏍️</span>
+    Motoboys em Espera
+</h2>
 
-    <h2>🏍️ Motoboys em Espera</h2>
-    {% if motoboys_espera %}
-        <ul>
-            {% for nome in motoboys_espera %}
-                <li>{{ nome }}</li>
-            {% endfor %}
-        </ul>
-    {% else %}
-        <p style="color: #718096;">Nenhum motoboy em espera.</p>
-    {% endif %}
-
-</body>
-</html>
+{% if motoboys_espera %}
+    <ul>
+        {% for nome in motoboys_espera %}
+            <li>{{ nome }}</li>
+        {% endfor %}
+    </ul>
+{% else %}
+    <p style="color: #718096;">Nenhum motoboy em espera.</p>
+{% endif %}
+{% endblock %}
