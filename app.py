@@ -1,12 +1,10 @@
 import os
 import json
-from flask import Flask, render_template, request, redirect, url_for, session, flash, Response, send_file
+from flask import Flask, render_template, request, redirect, url_for, session, flash
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, date, time, timezone
+from datetime import datetime, date, time
 from models import db, Usuario, Entrega
 import pytz
-import io
-import pandas as pd
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "sua_chave_secreta_aqui")
@@ -176,7 +174,36 @@ def dashboard():
     ).order_by(Entrega.hora_pedido.desc()).all()
     return render_template("dashboard_cooperado.html", entregas=entregas, data_filtro=data_filtro_str)
 
-# Outras rotas permanecem inalteradas
+@app.route("/cadastrar_cooperado", methods=["GET", "POST"])
+def cadastrar_cooperado():
+    if session.get("usuario_tipo") != "adm":
+        flash("Acesso negado.", "error")
+        return redirect(url_for("dashboard"))
+
+    if request.method == "POST":
+        nome = request.form.get("nome")
+        senha = request.form.get("senha")
+        tipo = "cooperado"
+
+        if not nome or not senha:
+            flash("Nome e senha são obrigatórios.", "error")
+            return redirect(url_for("cadastrar_cooperado"))
+
+        if Usuario.query.filter_by(nome=nome).first():
+            flash("Usuário já existe.", "error")
+            return redirect(url_for("cadastrar_cooperado"))
+
+        senha_hash = generate_password_hash(senha)
+        novo_usuario = Usuario(nome=nome, senha_hash=senha_hash, tipo=tipo)
+        db.session.add(novo_usuario)
+        db.session.commit()
+
+        flash(f"Cooperado {nome} cadastrado com sucesso!", "success")
+        return redirect(url_for("dashboard"))
+
+    return render_template("cadastrar_cooperado.html")
+
+# Outras rotas continuam aqui, não alteradas
 # ...
 
 with app.app_context():
