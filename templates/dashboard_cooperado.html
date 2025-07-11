@@ -4,27 +4,37 @@
 
 {% block content %}
 <style>
-    /* Estilo responsivo e melhoria visual */
-    .header {
+    /* Cards de status menores */
+    .status-cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+
+    .status-card {
         padding: 20px;
+        border-radius: 8px;
+        text-align: center;
+        font-weight: 600;
     }
 
-    .nav-links {
-        text-align: right;
-        margin-top: 10px;
+    .status-pendentes {
+        background: #fed7d7;
+        color: #c53030;
     }
 
-    .nav-links .logout {
-        color: #e53e3e;
-        text-decoration: none;
-        font-weight: bold;
+    .status-em-rota {
+        background: #feebc8;
+        color: #c05621;
     }
 
-    .section-title {
-        margin-top: 30px;
-        font-size: 1.5rem;
+    .status-entregues {
+        background: #c6f6d5;
+        color: #22543d;
     }
 
+    /* Tabela responsiva */
     .table-container {
         overflow-x: auto;
     }
@@ -33,7 +43,7 @@
         width: 100%;
         border-collapse: collapse;
         margin-top: 20px;
-        font-size: 0.9rem;
+        font-size: 1rem;
     }
 
     th, td {
@@ -43,11 +53,16 @@
         white-space: nowrap;
     }
 
-    th {
-        background-color: #f7fafc;
-        font-weight: bold;
+    /* Coluna descrição maior com quebra */
+    th:nth-child(2),
+    td:nth-child(2) {
+        min-width: 220px;
+        max-width: 350px;
+        white-space: normal;
+        word-wrap: break-word;
     }
 
+    /* Botão */
     .btn {
         background-color: #3182ce;
         color: white;
@@ -55,8 +70,10 @@
         padding: 6px 12px;
         border-radius: 4px;
         text-decoration: none;
+        white-space: nowrap;
     }
 
+    /* Status entrega cores originais */
     .status-pendente {
         color: #c53030;
         font-weight: bold;
@@ -72,9 +89,21 @@
         font-weight: bold;
     }
 
+    /* Status pagamento */
+    .pagamento-pago {
+        color: #22543d; /* verde escuro */
+        font-weight: 600;
+    }
+
+    .pagamento-pendente {
+        color: #c53030; /* vermelho */
+        font-weight: 600;
+    }
+
+    /* Responsividade */
     @media (max-width: 768px) {
         table {
-            font-size: 0.85rem;
+            font-size: 0.9rem;
         }
 
         th, td {
@@ -85,10 +114,6 @@
             font-size: 12px;
             padding: 5px 10px;
         }
-
-        .section-title {
-            font-size: 1.2rem;
-        }
     }
 </style>
 
@@ -97,7 +122,7 @@
     <p style="color: #718096; margin-bottom: 20px;">Bem-vindo, {{ session['usuario_nome'] }}!</p>
 
     <div class="nav-links">
-        <a href="{{ url_for('logout') }}" class="logout">
+        <a href="{{ url_for('logout') }}" class="logout" style="color:#e53e3e; font-weight:bold; text-decoration:none;">
             <span style="margin-right: 8px;">🚪</span>
             Sair
         </a>
@@ -112,24 +137,24 @@
 
     {% if entregas %}
         <!-- Resumo de status -->
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px;">
+        <div class="status-cards">
             {% set pendentes = entregas|selectattr("status_entrega", "equalto", "pendente")|list|length %}
             {% set em_rota = entregas|selectattr("status_entrega", "equalto", "em rota")|list|length %}
             {% set entregues = entregas|selectattr("status_entrega", "equalto", "entregue")|list|length %}
 
-            <div style="background: #fed7d7; padding: 20px; border-radius: 8px; text-align: center;">
-                <div style="font-size: 2rem; font-weight: bold; color: #c53030;">{{ pendentes }}</div>
-                <div style="color: #c53030; font-weight: 600;">Pendentes</div>
+            <div class="status-card status-pendentes">
+                <div style="font-size: 2rem; font-weight: bold;">{{ pendentes }}</div>
+                <div>Pendentes</div>
             </div>
 
-            <div style="background: #feebc8; padding: 20px; border-radius: 8px; text-align: center;">
-                <div style="font-size: 2rem; font-weight: bold; color: #c05621;">{{ em_rota }}</div>
-                <div style="color: #c05621; font-weight: 600;">Em Rota</div>
+            <div class="status-card status-em-rota">
+                <div style="font-size: 2rem; font-weight: bold;">{{ em_rota }}</div>
+                <div>Em Rota</div>
             </div>
 
-            <div style="background: #c6f6d5; padding: 20px; border-radius: 8px; text-align: center;">
-                <div style="font-size: 2rem; font-weight: bold; color: #22543d;">{{ entregues }}</div>
-                <div style="color: #22543d; font-weight: 600;">Entregues</div>
+            <div class="status-card status-entregues">
+                <div style="font-size: 2rem; font-weight: bold;">{{ entregues }}</div>
+                <div>Entregues</div>
             </div>
         </div>
 
@@ -155,15 +180,11 @@
                         <td>R$ {{ "%.2f"|format(entrega.valor or 0) }}</td>
                         <td>{{ entrega.hora_pedido.strftime('%d/%m/%Y %H:%M') }}</td>
                         <td>
-                            <span>
-                                {% if entrega.status_pagamento == 'pendente' %}
-                                    Pendente
-                                {% elif entrega.status_pagamento == 'pago' %}
-                                    Pago
-                                {% else %}
-                                    {{ entrega.status_pagamento }}
-                                {% endif %}
-                            </span>
+                            {% if entrega.status_pagamento == 'pago' %}
+                                <span class="pagamento-pago">Pago</span>
+                            {% else %}
+                                <span class="pagamento-pendente">Pendente</span>
+                            {% endif %}
                         </td>
                         <td>
                             <span class="status-{{ entrega.status_entrega|replace(' ', '-') }}">
