@@ -184,4 +184,4 @@ with app.app_context():
     criar_usuario_padrao()
 
 if __name__ == "__main__":
-    app.run(debug
+    app.run(debug=True)
