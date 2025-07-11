@@ -7,29 +7,45 @@
     <h1>Editar Entrega #{{ entrega.id }}</h1>
 
     <form method="POST">
-        <div class="form-group">
-            <label for="descricao">Descrição / Cliente:</label>
-            <input type="text" id="descricao" name="descricao" value="{{ entrega.descricao }}" required>
-        </div>
-
-        <div class="form-group">
-            <label for="valor">Valor:</label>
-            <input type="number" step="0.01" id="valor" name="valor" value="{{ entrega.valor }}" required>
-        </div>
-
         {% if user_tipo == 'adm' %}
-        <div class="form-group">
-            <label for="cooperado_id">Atribuir a um cooperado:</label>
-            <select id="cooperado_id" name="cooperado_id">
-                <option value="">-- Não atribuído --</option>
-                {% for c in cooperados %}
-                    <option value="{{ c.id }}" {% if entrega.cooperado_id == c.id %}selected{% endif %}>{{ c.nome }}</option>
-                {% endfor %}
-            </select>
-        </div>
+            <div class="form-group">
+                <label for="descricao">Descrição / Cliente:</label>
+                <input type="text" id="descricao" name="descricao" value="{{ entrega.descricao }}" required>
+            </div>
+
+            <div class="form-group">
+                <label for="valor">Valor:</label>
+                <input type="number" step="0.01" id="valor" name="valor" value="{{ entrega.valor }}" required>
+            </div>
+
+            <div class="form-group">
+                <label for="cooperado_id">Atribuir a um cooperado:</label>
+                <select id="cooperado_id" name="cooperado_id">
+                    <option value="">-- Não atribuído --</option>
+                    {% for c in cooperados %}
+                        <option value="{{ c.id }}" {% if entrega.cooperado_id == c.id %}selected{% endif %}>{{ c.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        {% else %}
+            <!-- Para cooperado, mostra descrição, valor e cooperado só como leitura -->
+            <div class="form-group">
+                <label>Descrição / Cliente:</label>
+                <p>{{ entrega.descricao }}</p>
+            </div>
+
+            <div class="form-group">
+                <label>Valor:</label>
+                <p>R$ {{ "%.2f"|format(entrega.valor or 0) }}</p>
+            </div>
+
+            <div class="form-group">
+                <label>Cooperado atribuído:</label>
+                <p>{{ entrega.cooperado.nome if entrega.cooperado else "Não atribuído" }}</p>
+            </div>
         {% endif %}
 
-        {% if user_tipo == 'adm' %}
+        <!-- Status Pagamento editável para admin e cooperado -->
         <div class="form-group">
             <label for="status_pagamento">Status Pagamento:</label>
             <select id="status_pagamento" name="status_pagamento">
@@ -37,8 +53,8 @@
                 <option value="pago" {% if entrega.status_pagamento == 'pago' %}selected{% endif %}>Pago</option>
             </select>
         </div>
-        {% endif %}
 
+        <!-- Status Entrega editável para ambos -->
         <div class="form-group">
             <label for="status_entrega">Status Entrega:</label>
             <select id="status_entrega" name="status_entrega">

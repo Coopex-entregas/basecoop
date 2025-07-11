@@ -156,5 +156,75 @@
             </a>
         </div>
     {% endif %}
+
+    <!-- Seção Motoboys em Espera -->
+    <h2 class="section-title" style="margin-top: 40px;">
+        <span style="margin-right: 10px;">🏍️</span>
+        Motoboys em Espera
+    </h2>
+
+    <div id="lista-motoboys"></div>
+    <button id="add-motoboy" class="btn" style="margin-top: 10px;">+ Adicionar Motoboy</button>
+    <button id="limpar-motoboys" class="btn btn-danger" style="margin-top: 10px; margin-left: 10px;">Limpar Tudo</button>
+
 </div>
+
+<script>
+  const listaDiv = document.getElementById('lista-motoboys');
+  const btnAdd = document.getElementById('add-motoboy');
+  const btnLimpar = document.getElementById('limpar-motoboys');
+
+  let motoboys = {{ motoboys_espera|tojson|safe }};
+
+  function salvarLista() {
+    fetch('/motoboys_espera', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ motoboys })
+    }).then(resp => resp.json())
+      .then(data => {
+        if(data.status !== 'ok') alert('Erro ao salvar lista!');
+      });
+  }
+
+  function renderLista() {
+    listaDiv.innerHTML = '';
+    motoboys.forEach((nome, idx) => {
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.value = nome;
+      input.placeholder = 'Nome do motoboy';
+      input.style.marginBottom = '5px';
+      input.style.width = '300px';
+      input.oninput = () => {
+        motoboys[idx] = input.value;
+        if(input.value.trim() === '') {
+          motoboys.splice(idx, 1);
+          renderLista();
+          salvarLista();
+        } else {
+          salvarLista();
+        }
+      };
+      listaDiv.appendChild(input);
+      listaDiv.appendChild(document.createElement('br'));
+    });
+  }
+
+  btnAdd.onclick = () => {
+    motoboys.push('');
+    renderLista();
+  };
+
+  btnLimpar.onclick = () => {
+    if(confirm('Deseja limpar toda a lista de motoboys em espera?')) {
+      motoboys = [];
+      renderLista();
+      salvarLista();
+    }
+  };
+
+  renderLista();
+</script>
+
 {% endblock %}

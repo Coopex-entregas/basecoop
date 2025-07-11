@@ -1,4 +1,5 @@
 import os
+import json
 from flask import Flask, render_template, request, redirect, url_for, session, flash, Response, send_file
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, time, timezone
@@ -17,15 +18,27 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db.init_app(app)
 
-# Timezones
-utc = pytz.utc
-brt = pytz.timezone('America/Sao_Paulo')
+ESPERA_FILE = 'motoboys_espera.json'
+
+def carregar_espera():
+    if os.path.exists(ESPERA_FILE):
+        with open(ESPERA_FILE, 'r', encoding='utf-8') as f:
+            try:
+                return json.load(f)
+            except json.JSONDecodeError:
+                return []
+    return []
+
+def salvar_espera(lista):
+    with open(ESPERA_FILE, 'w', encoding='utf-8') as f:
+        json.dump(lista, f, ensure_ascii=False)
 
 def utc_to_brt(value):
     if not value:
         return ''
+    utc = pytz.utc
+    brt = pytz.timezone('America/Sao_Paulo')
     if value.tzinfo is None:
-        # Se datetime sem timezone, assume UTC
         value_utc = utc.localize(value)
     else:
         value_utc = value
@@ -45,7 +58,8 @@ def criar_usuario_padrao():
 def proteger_rotas():
     rotas_protegidas = {
         "dashboard", "logout", "cadastrar_cooperado", "excluir_cooperado",
-        "cadastrar_entrega", "editar_entrega", "excluir_entrega", "exportar_entregas"
+        "cadastrar_entrega", "editar_entrega", "excluir_entrega", "exportar_entregas",
+        "motoboys_espera"
     }
     if request.endpoint in rotas_protegidas and "usuario_id" not in session:
         flash("Acesso não autorizado. Faça login para continuar.", "error")
@@ -84,9 +98,8 @@ def dashboard():
     else:
         data_filtro = date.today()
 
-    # intervalo UTC do dia filtrado
-    inicio_dia = datetime.combine(data_filtro, time.min).replace(tzinfo=utc)
-    fim_dia = datetime.combine(data_filtro, time.max).replace(tzinfo=utc)
+    inicio_dia = datetime.combine(data_filtro, time.min).replace(tzinfo=timezone.utc)
+    fim_dia = datetime.combine(data_filtro, time.max).replace(tzinfo=timezone.utc)
 
     if session["usuario_tipo"] == "adm":
         cooperados = Usuario.query.filter_by(tipo="cooperado").all()
@@ -94,10 +107,12 @@ def dashboard():
             Entrega.hora_pedido >= inicio_dia,
             Entrega.hora_pedido <= fim_dia
         ).order_by(Entrega.hora_pedido.desc()).all()
+        lista_espera = carregar_espera()
         return render_template("dashboard_admin.html",
                                cooperados=cooperados,
                                entregas=entregas,
-                               data_filtro=data_filtro_str)
+                               data_filtro=data_filtro_str,
+                               motoboys_espera=lista_espera)
 
     entregas = Entrega.query.filter(
         Entrega.cooperado_id == session["usuario_id"],
@@ -161,8 +176,7 @@ def cadastrar_entrega():
         hora_str = request.form["hora_pedido"]
         coop_id = request.form.get("cooperado_id")
         try:
-            # sempre grava como UTC
-            hora_pedido = datetime.strptime(hora_str, "%Y-%m-%dT%H:%M").replace(tzinfo=utc)
+            hora_pedido = datetime.strptime(hora_str, "%Y-%m-%dT%H:%M").replace(tzinfo=timezone.utc)
         except ValueError:
             flash("Formato de data/hora inválido.", "error")
             return redirect(url_for("cadastrar_entrega"))
@@ -174,7 +188,7 @@ def cadastrar_entrega():
             status_pagamento="pendente",
             status_entrega="pendente",
             cooperado_id=int(coop_id) if coop_id else None,
-            hora_atribuida=datetime.now(utc) if coop_id else None
+            hora_atribuida=datetime.now(timezone.utc) if coop_id else None
         )
         db.session.add(entrega)
         db.session.commit()
@@ -197,13 +211,13 @@ def editar_entrega(entrega_id):
             try:
                 entrega.hora_pedido = datetime.strptime(
                     request.form["hora_pedido"], "%Y-%m-%dT%H:%M"
-                ).replace(tzinfo=utc)
+                ).replace(tzinfo=timezone.utc)
             except ValueError:
                 flash("Formato de data/hora inválido.", "error")
                 return redirect(url_for("editar_entrega", entrega_id=entrega_id))
             coop_id = request.form.get("cooperado_id")
             entrega.cooperado_id = int(coop_id) if coop_id else None
-            entrega.hora_atribuida = datetime.now(utc) if coop_id else None
+            entrega.hora_atribuida = datetime.now(timezone.utc) if coop_id else None
             entrega.status_pagamento = request.form["status_pagamento"]
             entrega.status_entrega = request.form["status_entrega"]
         else:
@@ -263,6 +277,22 @@ def exportar_entregas():
         download_name='entregas.xlsx',
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
+
+@app.route("/motoboys_espera", methods=["GET", "POST"])
+def motoboys_espera():
+    if session.get("usuario_tipo") != "adm":
+        flash("Acesso restrito a administradores.", "error")
+        return redirect(url_for("dashboard"))
+
+    if request.method == "POST":
+        dados = request.get_json()
+        lista = dados.get("motoboys", [])
+        lista = [nome.strip() for nome in lista if nome.strip()]
+        salvar_espera(lista)
+        return {"status": "ok"}
+
+    lista_atual = carregar_espera()
+    return {"motoboys": lista_atual}
 
 with app.app_context():
     db.create_all()
