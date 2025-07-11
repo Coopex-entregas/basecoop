@@ -109,12 +109,10 @@ def dashboard():
         ).order_by(Entrega.hora_pedido.desc()).all()
         lista_espera = carregar_espera()
 
+        # Cálculo dos valores por cooperado no mês atual
         hoje = date.today()
         inicio_mes = datetime(hoje.year, hoje.month, 1, tzinfo=timezone.utc)
-        if hoje.month == 12:
-            fim_mes = datetime(hoje.year + 1, 1, 1, tzinfo=timezone.utc)
-        else:
-            fim_mes = datetime(hoje.year, hoje.month + 1, 1, tzinfo=timezone.utc)
+        fim_mes = datetime(hoje.year, hoje.month + 1 if hoje.month < 12 else 1, 1, tzinfo=timezone.utc) if hoje.month < 12 else datetime(hoje.year + 1, 1, 1, tzinfo=timezone.utc)
 
         valores_por_cooperado = []
         for c in cooperados:
@@ -127,6 +125,7 @@ def dashboard():
             ).scalar()
             valores_por_cooperado.append((c.nome, total))
 
+        # Total ganho no mês
         total_valor_mes = db.session.query(
             db.func.coalesce(db.func.sum(Entrega.valor), 0)
         ).filter(
@@ -134,6 +133,7 @@ def dashboard():
             Entrega.hora_pedido < fim_mes
         ).scalar()
 
+        # Total entregas no dia filtrado
         total_dia = db.session.query(
             db.func.count(Entrega.id)
         ).filter(
@@ -141,6 +141,7 @@ def dashboard():
             Entrega.hora_pedido <= fim_dia
         ).scalar()
 
+        # Total entregas no ano atual
         inicio_ano = datetime(hoje.year, 1, 1, tzinfo=timezone.utc)
         fim_ano = datetime(hoje.year + 1, 1, 1, tzinfo=timezone.utc)
         total_entregas_ano = db.session.query(
@@ -162,6 +163,7 @@ def dashboard():
             total_entregas_ano=total_entregas_ano
         )
 
+    # Para cooperados comuns, mostrar só suas entregas do dia filtrado
     entregas = Entrega.query.filter(
         Entrega.cooperado_id == session["usuario_id"],
         Entrega.hora_pedido >= inicio_dia,
@@ -219,23 +221,24 @@ def cadastrar_entrega():
 
     cooperados = Usuario.query.filter_by(tipo="cooperado").all()
     if request.method == "POST":
-        descricao = request.form.get("cliente") or request.form.get("descricao") or ""
+        descricao = request.form["cliente"]
         valor = request.form.get("valor", type=float)
-        hora_str = request.form.get("hora_pedido")
+        hora_str = request.form["hora_pedido"]
         coop_id = request.form.get("cooperado_id")
 
-        # Tratamento da hora_pedido com timezone UTC
         try:
-            # Input vem no formato "YYYY-MM-DDTHH:MM" (ex: 2025-07-11T20:00)
-            # Convertendo para datetime com timezone utc
-            hora_pedido = datetime.strptime(hora_str, "%Y-%m-%dT%H:%M").replace(tzinfo=timezone.utc)
-        except (ValueError, TypeError):
+            # Parse sem timezone
+            naive_dt = datetime.strptime(hora_str, "%Y-%m-%dT%H:%M")
+
+            # Localiza para o fuso horário do Brasil
+            brt = pytz.timezone('America/Sao_Paulo')
+            local_dt = brt.localize(naive_dt)
+
+            # Converte para UTC antes de salvar no banco
+            hora_pedido = local_dt.astimezone(pytz.utc)
+        except ValueError:
             flash("Formato de data/hora inválido.", "error")
             return redirect(url_for("cadastrar_entrega"))
-
-        # Valor padrão para evitar None
-        if valor is None:
-            valor = 0.0
 
         entrega = Entrega(
             descricao=descricao,
@@ -244,7 +247,7 @@ def cadastrar_entrega():
             status_pagamento="pendente",
             status_entrega="pendente",
             cooperado_id=int(coop_id) if coop_id else None,
-            hora_atribuida=datetime.now(timezone.utc) if coop_id else None
+            hora_atribuida=datetime.now(pytz.utc) if coop_id else None
         )
         db.session.add(entrega)
         db.session.commit()
