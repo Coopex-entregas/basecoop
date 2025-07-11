@@ -1,40 +1,89 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Painel Administrativo - Coopex</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        body {
+            background-color: #f7fafc; /* fundo suave */
+            color: #2d3748;
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
 
-{% block title %}Painel Administrativo - Coopex{% endblock %}
+        h1, h2, h3 {
+            color: #2d3748;
+        }
 
-{% block content %}
-<div class="header">
-    <h1>Painel Administrativo COOPEX</h1>
-    <p style="color: #718096; margin-bottom: 20px;">Bem-vindo, {{ session['usuario_nome'] }}!</p>
-    
-    <div class="nav-links">
-        <a href="{{ url_for('cadastrar_cooperado') }}">
-            <span style="margin-right: 8px;">👤</span>
-            Cadastrar Cooperado
-        </a>
-        <a href="{{ url_for('cadastrar_entrega') }}">
-            <span style="margin-right: 8px;">📦</span>
-            Nova Entrega
-        </a>
-        <a href="{{ url_for('exportar_entregas') }}" class="btn" style="margin-left: 10px;">
-            <span style="margin-right: 8px;">📊</span>
-            Exportar Entregas
-        </a>
-        <a href="{{ url_for('logout') }}" class="logout">
-            <span style="margin-right: 8px;">🚪</span>
-            Sair
-        </a>
-    </div>
-</div>
+        a {
+            text-decoration: none;
+            color: #2d3748;
+        }
 
-<!-- Estatísticas -->
-<section style="margin: 20px 0; padding: 10px; background-color: #f0f4f8; border-radius: 8px;">
-    <h2>📊 Estatísticas Gerais</h2>
+        .btn {
+            background-color: #4a5568;
+            color: #fff !important;
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        .btn:hover {
+            background-color: #2d3748;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        th, td {
+            padding: 10px;
+            border: 1px solid #e2e8f0;
+            text-align: left;
+        }
+
+        th {
+            background-color: #edf2f7;
+        }
+
+        hr {
+            margin: 30px 0;
+            border: none;
+            border-top: 1px solid #ccc;
+        }
+
+        ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        ul li {
+            padding: 5px 0;
+        }
+
+        .status {
+            color: #718096;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Painel Administrativo</h1>
+
+    <p style="color: #718096;">Olá, {{ session['usuario_nome'] }} | <a href="{{ url_for('logout') }}">Sair</a></p>
+
+    <h2>📊 Estatísticas</h2>
     <p><strong>Total de entregas hoje:</strong> {{ total_dia }}</p>
     <p><strong>Total de entregas no ano:</strong> {{ total_entregas_ano }}</p>
     <p><strong>Total ganho no mês:</strong> R$ {{ '%.2f' % total_valor_mes }}</p>
 
-    <h3>Ganhos por Cooperado no Mês</h3>
+    <h3>💰 Ganhos por Cooperado no Mês</h3>
     {% if valores_por_cooperado %}
         <ul>
             {% for nome, valor in valores_por_cooperado %}
@@ -42,66 +91,33 @@
             {% endfor %}
         </ul>
     {% else %}
-        <p>Nenhum ganho registrado este mês.</p>
+        <p style="color: #718096;">Nenhum ganho registrado este mês.</p>
     {% endif %}
-</section>
 
-<!-- Filtro de data -->
-<form method="get" action="{{ url_for('dashboard') }}" style="margin: 20px 0;">
-  <label for="data_filtro">Filtrar por data:</label>
-  <input type="date" id="data_filtro" name="data_filtro" value="{{ data_filtro or '' }}">
-  <button type="submit">Filtrar</button>
-</form>
+    <hr>
 
-<!-- Lista de cooperados -->
-<h2 class="section-title">
-    <span style="margin-right: 10px;">👥</span>
-    Cooperados Cadastrados
-</h2>
+    <form method="get" action="{{ url_for('dashboard') }}">
+        <label for="data_filtro">Filtrar por data:</label>
+        <input type="date" id="data_filtro" name="data_filtro" value="{{ data_filtro or '' }}">
+        <button type="submit" class="btn">Filtrar</button>
+    </form>
 
-{% if cooperados %}
-    <div class="cooperados-list">
-        {% for c in cooperados %}
-            <div class="cooperado-card" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
-                <div>
-                    <div class="cooperado-name">{{ c.nome }}</div>
-                    <div style="color: #718096; font-size: 14px;">
-                        Cooperado ativo
-                    </div>
-                </div>
-                <form action="{{ url_for('excluir_cooperado', cooperado_id=c.id) }}" method="POST" onsubmit="return confirm('Tem certeza que deseja excluir o cooperado {{ c.nome }}? Esta ação não pode ser desfeita.')">
-                    <button type="submit" class="btn btn-danger" style="padding: 6px 12px; font-size: 14px;">
-                        Excluir
-                    </button>
-                </form>
-            </div>
-        {% endfor %}
-    </div>
-{% else %}
-    <div style="text-align: center; padding: 40px; color: #718096;">
-        <p>Nenhum cooperado cadastrado ainda.</p>
-        <a href="{{ url_for('cadastrar_cooperado') }}" class="btn" style="margin-top: 15px;">
-            Cadastrar Primeiro Cooperado
-        </a>
-    </div>
-{% endif %}
+    <hr>
 
-<!-- Seção de Entregas -->
-<h2 class="section-title" style="margin-top: 40px;">
-    <span style="margin-right: 10px;">📦</span>
-    Gestão de Entregas
-</h2>
+    <a href="{{ url_for('cadastrar_entrega') }}" class="btn">➕ Nova Entrega</a>
+    <a href="{{ url_for('cadastrar_cooperado') }}" class="btn">👤 Cadastrar Cooperado</a>
+    <a href="{{ url_for('exportar_entregas') }}" class="btn">📥 Exportar Entregas</a>
 
-{% if entregas %}
-    <div class="table-container">
+    <hr>
+
+    <h2>📦 Entregas do Dia</h2>
+    {% if entregas %}
         <table>
             <thead>
                 <tr>
-                    <th>ID</th>
-                    <th>Cliente</th>
+                    <th>Descrição</th>
                     <th>Valor</th>
-                    <th>Hora do Pedido</th>
-                    <th>Hora Atribuída</th>
+                    <th>Horário Pedido</th>
                     <th>Cooperado</th>
                     <th>Status Pagamento</th>
                     <th>Status Entrega</th>
@@ -109,137 +125,39 @@
                 </tr>
             </thead>
             <tbody>
-                {% for e in entregas %}
+                {% for entrega in entregas %}
                 <tr>
-                    <td><strong>#{{ e.id }}</strong></td>
-                    <td>{{ e.descricao }}</td>
-                    <td><strong>R$ {{ "%.2f"|format(e.valor or 0) }}</strong></td>
-                    <td>{{ e.hora_pedido|utc_to_brt }}</td>
+                    <td>{{ entrega.descricao }}</td>
+                    <td>R$ {{ '%.2f' % entrega.valor }}</td>
+                    <td>{{ entrega.hora_pedido|utc_to_brt }}</td>
+                    <td>{{ entrega.cooperado.nome if entrega.cooperado else '---' }}</td>
+                    <td>{{ entrega.status_pagamento }}</td>
+                    <td>{{ entrega.status_entrega }}</td>
                     <td>
-                        {% if e.hora_atribuida %}
-                            {{ e.hora_atribuida|utc_to_brt }}
-                        {% else %}
-                            <span style="color: #718096;">-</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if e.cooperado %}
-                            <strong>{{ e.cooperado.nome }}</strong>
-                        {% else %}
-                            <span style="color: #718096;">Não atribuído</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        <span class="status-{{ e.status_pagamento }}">
-                            {% if e.status_pagamento == 'pendente' %}
-                                Pendente
-                            {% else %}
-                                Pago
-                            {% endif %}
-                        </span>
-                    </td>
-                    <td>
-                        <span class="status-{{ e.status_entrega|replace(' ', '-') }}">
-                            {% if e.status_entrega == 'pendente' %}
-                                Pendente
-                            {% elif e.status_entrega == 'em rota' %}
-                                Em Rota
-                            {% else %}
-                                Entregue
-                            {% endif %}
-                        </span>
-                    </td>
-                    <td>
-                        <a href="{{ url_for('editar_entrega', entrega_id=e.id) }}" class="btn" style="padding: 6px 12px; font-size: 14px; margin-right: 5px;">
-                            Editar
-                        </a>
-
-                        <form action="{{ url_for('excluir_entrega', entrega_id=e.id) }}" method="POST" style="display: inline;" onsubmit="return confirm('Tem certeza que deseja excluir a entrega #{{ e.id }}? Esta ação não pode ser desfeita.')">
-                            <button type="submit" class="btn btn-danger" style="padding: 6px 12px; font-size: 14px;">
-                                Excluir
-                            </button>
-                        </form>
+                        <a href="{{ url_for('editar_entrega', entrega_id=entrega.id) }}" class="btn">✏️</a>
+                        <a href="{{ url_for('excluir_entrega', entrega_id=entrega.id) }}"
+                           onclick="return confirm('Tem certeza que deseja excluir?')" class="btn">❌</a>
                     </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
-    </div>
-{% else %}
-    <div style="text-align: center; padding: 40px; color: #718096;">
-        <p>Nenhuma entrega cadastrada ainda.</p>
-        <a href="{{ url_for('cadastrar_entrega') }}" class="btn" style="margin-top: 15px;">
-            Cadastrar Primeira Entrega
-        </a>
-    </div>
-{% endif %}
+    {% else %}
+        <p style="color: #718096;">🚫 Nenhuma entrega registrada para este dia.</p>
+    {% endif %}
 
-<!-- Seção Motoboys em Espera -->
-<h2 class="section-title" style="margin-top: 40px;">
-    <span style="margin-right: 10px;">🏍️</span>
-    Motoboys em Espera
-</h2>
+    <hr>
 
-<div id="lista-motoboys"></div>
-<button id="add-motoboy" class="btn" style="margin-top: 10px;">+ Adicionar Motoboy</button>
-<button id="limpar-motoboys" class="btn btn-danger" style="margin-top: 10px; margin-left: 10px;">Limpar Tudo</button>
+    <h2>🏍️ Motoboys em Espera</h2>
+    {% if motoboys_espera %}
+        <ul>
+            {% for nome in motoboys_espera %}
+                <li>{{ nome }}</li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p style="color: #718096;">Nenhum motoboy em espera.</p>
+    {% endif %}
 
-<script>
-  const listaDiv = document.getElementById('lista-motoboys');
-  const btnAdd = document.getElementById('add-motoboy');
-  const btnLimpar = document.getElementById('limpar-motoboys');
-
-  let motoboys = {{ motoboys_espera|tojson|safe }};
-
-  function salvarLista() {
-    fetch('/motoboys_espera', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ motoboys })
-    }).then(resp => resp.json())
-      .then(data => {
-        if(data.status !== 'ok') alert('Erro ao salvar lista!');
-      });
-  }
-
-  function renderLista() {
-    listaDiv.innerHTML = '';
-    motoboys.forEach((nome, idx) => {
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.value = nome;
-      input.placeholder = 'Nome do motoboy';
-      input.style.marginBottom = '5px';
-      input.style.width = '300px';
-      input.oninput = () => {
-        motoboys[idx] = input.value;
-        if(input.value.trim() === '') {
-          motoboys.splice(idx, 1);
-          renderLista();
-          salvarLista();
-        } else {
-          salvarLista();
-        }
-      };
-      listaDiv.appendChild(input);
-      listaDiv.appendChild(document.createElement('br'));
-    });
-  }
-
-  btnAdd.onclick = () => {
-    motoboys.push('');
-    renderLista();
-  };
-
-  btnLimpar.onclick = () => {
-    if(confirm('Deseja limpar toda a lista de motoboys em espera?')) {
-      motoboys = [];
-      renderLista();
-      salvarLista();
-    }
-  };
-
-  renderLista();
-</script>
-
-{% endblock %}
+</body>
+</html>
