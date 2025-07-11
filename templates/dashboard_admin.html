@@ -1,18 +1,93 @@
-<!-- Estatísticas -->
-<div class="stats" style="margin: 30px 0;">
-    <h2>📊 Estatísticas</h2>
-    <p><strong>Total de entregas hoje:</strong> {{ total_dia }}</p>
-    <p><strong>Total de entregas no ano:</strong> {{ total_ano }}</p>
-    <p><strong>Total ganho no mês:</strong> R$ {{ "%.2f"|format(total_mes or 0) }}</p>
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Painel Administrativo - Coopex</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <h1>Painel Administrativo</h1>
 
-    <h3 style="margin-top: 20px;">Ganhos por Cooperado no Mês</h3>
-    {% if ganhos_mes %}
+    <p>Olá, {{ session['usuario_nome'] }} | <a href="{{ url_for('logout') }}">Sair</a></p>
+
+    <h2>📊 Estatísticas</h2>
+    <p>Total de entregas hoje: {{ total_dia }}</p>
+    <p>Total de entregas no ano: {{ total_entregas_ano }}</p>
+    <p>Total ganho no mês: R$ {{ '%.2f' % total_valor_mes }}</p>
+
+    <h3>Ganhos por Cooperado no Mês</h3>
+    {% if valores_por_cooperado %}
         <ul>
-            {% for g in ganhos_mes %}
-                <li><strong>{{ g.nome }}:</strong> R$ {{ "%.2f"|format(g.total or 0) }}</li>
+            {% for nome, valor in valores_por_cooperado %}
+                <li>{{ nome }}: R$ {{ '%.2f' % valor }}</li>
             {% endfor %}
         </ul>
     {% else %}
         <p>Nenhum ganho registrado este mês.</p>
     {% endif %}
-</div>
+
+    <hr>
+
+    <form method="get" action="{{ url_for('dashboard') }}">
+        <label for="data_filtro">Filtrar por data:</label>
+        <input type="date" id="data_filtro" name="data_filtro" value="{{ data_filtro or '' }}">
+        <button type="submit">Filtrar</button>
+    </form>
+
+    <hr>
+
+    <a href="{{ url_for('cadastrar_entrega') }}">➕ Nova Entrega</a> |
+    <a href="{{ url_for('cadastrar_cooperado') }}">👤 Cadastrar Cooperado</a> |
+    <a href="{{ url_for('exportar_entregas') }}">📥 Exportar Entregas</a>
+
+    <hr>
+
+    <h2>📦 Entregas do Dia</h2>
+    {% if entregas %}
+        <table border="1">
+            <thead>
+                <tr>
+                    <th>Descrição</th>
+                    <th>Valor</th>
+                    <th>Horário Pedido</th>
+                    <th>Cooperado</th>
+                    <th>Status Pagamento</th>
+                    <th>Status Entrega</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entrega in entregas %}
+                <tr>
+                    <td>{{ entrega.descricao }}</td>
+                    <td>R$ {{ '%.2f' % entrega.valor }}</td>
+                    <td>{{ entrega.hora_pedido|utc_to_brt }}</td>
+                    <td>{{ entrega.cooperado.nome if entrega.cooperado else '---' }}</td>
+                    <td>{{ entrega.status_pagamento }}</td>
+                    <td>{{ entrega.status_entrega }}</td>
+                    <td>
+                        <a href="{{ url_for('editar_entrega', entrega_id=entrega.id) }}">✏️</a>
+                        <a href="{{ url_for('excluir_entrega', entrega_id=entrega.id) }}" onclick="return confirm('Tem certeza que deseja excluir?')">❌</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>🚫 Nenhuma entrega registrada para este dia.</p>
+    {% endif %}
+
+    <hr>
+
+    <h2>🏍️ Motoboys em Espera</h2>
+    {% if motoboys_espera %}
+        <ul>
+            {% for nome in motoboys_espera %}
+                <li>{{ nome }}</li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p>Nenhum motoboy em espera.</p>
+    {% endif %}
+</body>
+</html>
