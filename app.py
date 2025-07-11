@@ -1,9 +1,11 @@
 import os
-from flask import Flask, render_template, request, redirect, url_for, session, flash, Response
+from flask import Flask, render_template, request, redirect, url_for, session, flash, Response, send_file
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, time, timezone
 from models import db, Usuario, Entrega
 import pytz
+import io
+import pandas as pd
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "sua_chave_secreta_aqui")
@@ -231,18 +233,30 @@ def exportar_entregas():
         return redirect(url_for("dashboard"))
     entregas = Entrega.query.all()
 
-    def gerar_csv():
-        yield "\ufeff"
-        yield "ID,Descrição,Valor,Status Pagamento,Status Entrega,Hora Pedido,Hora Atribuída\n"
-        for e in entregas:
-            yield f'{e.id},"{e.descricao}",{e.valor},' \
-                  f'{e.status_pagamento},{e.status_entrega},' \
-                  f'{e.hora_pedido},{e.hora_atribuida or ""}\n'
+    dados = []
+    for e in entregas:
+        dados.append({
+            "Nome do Cliente": e.descricao,
+            "Hora do Pedido": utc_to_brt(e.hora_pedido),
+            "Hora Atribuída": utc_to_brt(e.hora_atribuida),
+            "Valor (R$)": f"{e.valor:.2f}" if e.valor else "0.00",
+            "Cooperado": e.cooperado.nome if e.cooperado else "Não atribuído",
+            "Status Pagamento": e.status_pagamento.capitalize(),
+            "Status Entrega": e.status_entrega.capitalize(),
+        })
 
-    return Response(
-        gerar_csv(),
-        mimetype="text/csv",
-        headers={"Content-Disposition": "attachment; filename=entregas.csv"}
+    df = pd.DataFrame(dados)
+
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False, sheet_name='Entregas')
+
+    output.seek(0)
+    return send_file(
+        output,
+        as_attachment=True,
+        download_name='entregas.xlsx',
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
 
 with app.app_context():
