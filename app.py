@@ -7,7 +7,6 @@ from models import db, Usuario, Entrega
 import pytz
 import io
 import pandas as pd
-from sqlalchemy import func
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "sua_chave_secreta_aqui")
@@ -110,46 +109,47 @@ def dashboard():
         ).order_by(Entrega.hora_pedido.desc()).all()
         lista_espera = carregar_espera()
 
-        # --- INÍCIO DA PARTE NOVA ---
-        hoje = datetime.now(timezone.utc)
+        # Cálculo dos valores por cooperado no mês atual
+        hoje = date.today()
         inicio_mes = datetime(hoje.year, hoje.month, 1, tzinfo=timezone.utc)
-        fim_mes = datetime(
-            hoje.year + (1 if hoje.month == 12 else 0),
-            1 if hoje.month == 12 else hoje.month + 1,
-            1,
-            tzinfo=timezone.utc
-        )
+        fim_mes = datetime(hoje.year, hoje.month + 1 if hoje.month < 12 else 1, 1, tzinfo=timezone.utc) if hoje.month < 12 else datetime(hoje.year + 1, 1, 1, tzinfo=timezone.utc)
 
-        inicio_ano = datetime(hoje.year, 1, 1, tzinfo=timezone.utc)
-        fim_ano = datetime(hoje.year + 1, 1, 1, tzinfo=timezone.utc)
+        valores_por_cooperado = []
+        for c in cooperados:
+            total = db.session.query(
+                db.func.coalesce(db.func.sum(Entrega.valor), 0)
+            ).filter(
+                Entrega.cooperado_id == c.id,
+                Entrega.hora_pedido >= inicio_mes,
+                Entrega.hora_pedido < fim_mes
+            ).scalar()
+            valores_por_cooperado.append((c.nome, total))
 
-        valores_por_cooperado = db.session.query(
-            Usuario.nome,
-            func.coalesce(func.sum(Entrega.valor), 0)
-        ).join(Entrega, Entrega.cooperado_id == Usuario.id)\
-         .filter(
-            Usuario.tipo == "cooperado",
-            Entrega.hora_pedido >= inicio_mes,
-            Entrega.hora_pedido < fim_mes
-         ).group_by(Usuario.id).all()
-
-        valor_total_mes = db.session.query(
-            func.coalesce(func.sum(Entrega.valor), 0)
+        # Total ganho no mês
+        total_valor_mes = db.session.query(
+            db.func.coalesce(db.func.sum(Entrega.valor), 0)
         ).filter(
             Entrega.hora_pedido >= inicio_mes,
             Entrega.hora_pedido < fim_mes
         ).scalar()
 
-        total_entregas_dia = db.session.query(func.count(Entrega.id)).filter(
+        # Total entregas no dia filtrado
+        total_dia = db.session.query(
+            db.func.count(Entrega.id)
+        ).filter(
             Entrega.hora_pedido >= inicio_dia,
             Entrega.hora_pedido <= fim_dia
         ).scalar()
 
-        total_entregas_ano = db.session.query(func.count(Entrega.id)).filter(
+        # Total entregas no ano atual
+        inicio_ano = datetime(hoje.year, 1, 1, tzinfo=timezone.utc)
+        fim_ano = datetime(hoje.year + 1, 1, 1, tzinfo=timezone.utc)
+        total_entregas_ano = db.session.query(
+            db.func.count(Entrega.id)
+        ).filter(
             Entrega.hora_pedido >= inicio_ano,
             Entrega.hora_pedido < fim_ano
         ).scalar()
-        # --- FIM DA PARTE NOVA ---
 
         return render_template(
             "dashboard_admin.html",
@@ -158,17 +158,18 @@ def dashboard():
             data_filtro=data_filtro_str,
             motoboys_espera=lista_espera,
             valores_por_cooperado=valores_por_cooperado,
-            valor_total_mes=valor_total_mes,
-            total_entregas_dia=total_entregas_dia,
+            total_valor_mes=total_valor_mes,
+            total_dia=total_dia,
             total_entregas_ano=total_entregas_ano
         )
 
+    # Para cooperados comuns, mostrar só suas entregas do dia filtrado
     entregas = Entrega.query.filter(
         Entrega.cooperado_id == session["usuario_id"],
         Entrega.hora_pedido >= inicio_dia,
         Entrega.hora_pedido <= fim_dia
     ).order_by(Entrega.hora_pedido.desc()).all()
-    return render_template("dashboard_cooperado.html", entregas=entregas)
+    return render_template("dashboard_cooperado.html", entregas=entregas, data_filtro=data_filtro_str)
 
 @app.route("/logout")
 def logout():
