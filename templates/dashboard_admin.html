@@ -127,15 +127,19 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for entrega in entregas %}
-                    <tr style="border-bottom: 1px solid #ddd;">
-                        <td>#{{ entrega.id }}</td>
-                        <td>{{ entrega.descricao }}</td>
-                        <td>R$ {{ '%.2f' % (entrega.valor or 0) }}</td>
-                        <td>{{ entrega.hora_pedido|utc_to_brt }}</td>
-			<td>{{ entrega.hora_atribuida | utc_to_brt if entrega.hora_atribuida else '---' }}</td>
-                        <td>{{ entrega.cooperado.nome if entrega.cooperado else '---' }}</td>
-                        <td>
+                  {% for entrega in entregas %}
+   			 <tr style="border-bottom: 1px solid #ddd;">
+       			 <td>#{{ entrega.id }}</td>
+     			 <td>{{ entrega.descricao }}</td>
+     			 <td>R$ {{ '%.2f' % (entrega.valor or 0) }}</td>
+       			 <td>{{ entrega.hora_pedido | utc_to_brt }}</td>
+     			 <td>{{ (entrega.hora_atribuida | utc_to_brt) if entrega.hora_atribuida else '---' }}</td>
+        		 <td>{{ entrega.cooperado.nome if entrega.cooperado else '---' }}</td>
+       			 <td>
+          		     <!-- Aqui você pode continuar com os botões ou ações -->
+       			 </td>
+   		     </tr>
+		{% endfor %}
                             <span class="status-{{ entrega.status_pagamento }}">
                                 {{ entrega.status_pagamento.capitalize() }}
                             </span>
