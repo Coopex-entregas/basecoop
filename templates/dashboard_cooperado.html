@@ -3,6 +3,95 @@
 {% block title %}Painel do Cooperado{% endblock %}
 
 {% block content %}
+<style>
+    /* Estilo responsivo e melhoria visual */
+    .header {
+        padding: 20px;
+    }
+
+    .nav-links {
+        text-align: right;
+        margin-top: 10px;
+    }
+
+    .nav-links .logout {
+        color: #e53e3e;
+        text-decoration: none;
+        font-weight: bold;
+    }
+
+    .section-title {
+        margin-top: 30px;
+        font-size: 1.5rem;
+    }
+
+    .table-container {
+        overflow-x: auto;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+        font-size: 0.9rem;
+    }
+
+    th, td {
+        padding: 10px;
+        border-bottom: 1px solid #e2e8f0;
+        text-align: left;
+        white-space: nowrap;
+    }
+
+    th {
+        background-color: #f7fafc;
+        font-weight: bold;
+    }
+
+    .btn {
+        background-color: #3182ce;
+        color: white;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 4px;
+        text-decoration: none;
+    }
+
+    .status-pendente {
+        color: #c53030;
+        font-weight: bold;
+    }
+
+    .status-em-rota {
+        color: #c05621;
+        font-weight: bold;
+    }
+
+    .status-entregue {
+        color: #22543d;
+        font-weight: bold;
+    }
+
+    @media (max-width: 768px) {
+        table {
+            font-size: 0.85rem;
+        }
+
+        th, td {
+            padding: 8px;
+        }
+
+        .btn {
+            font-size: 12px;
+            padding: 5px 10px;
+        }
+
+        .section-title {
+            font-size: 1.2rem;
+        }
+    }
+</style>
+
 <div class="header">
     <h1>Dashboard do Cooperado</h1>
     <p style="color: #718096; margin-bottom: 20px;">Bem-vindo, {{ session['usuario_nome'] }}!</p>
@@ -51,7 +140,7 @@
                     <tr>
                         <th>ID</th>
                         <th>Descrição</th>
-                        <th>Valor</th>  <!-- Coluna Valor adicionada -->
+                        <th>Valor</th>
                         <th>Data/Hora</th>
                         <th>Status Pagamento</th>
                         <th>Status Entrega</th>
@@ -63,15 +152,18 @@
                     <tr>
                         <td>#{{ entrega.id }}</td>
                         <td>{{ entrega.descricao }}</td>
-                        <td>R$ {{ "%.2f"|format(entrega.valor or 0) }}</td>  <!-- Valor exibido -->
+                        <td>R$ {{ "%.2f"|format(entrega.valor or 0) }}</td>
                         <td>{{ entrega.hora_pedido.strftime('%d/%m/%Y %H:%M') }}</td>
                         <td>
-                            <form method="post" action="{{ url_for('editar_entrega', entrega_id=entrega.id) }}">
-                                <select name="status_pagamento" onchange="this.form.submit()">
-                                    <option value="pendente" {% if entrega.status_pagamento == 'pendente' %}selected{% endif %}>Pendente</option>
-                                    <option value="pago" {% if entrega.status_pagamento == 'pago' %}selected{% endif %}>Pago</option>
-                                </select>
-                            </form>
+                            <span>
+                                {% if entrega.status_pagamento == 'pendente' %}
+                                    Pendente
+                                {% elif entrega.status_pagamento == 'pago' %}
+                                    Pago
+                                {% else %}
+                                    {{ entrega.status_pagamento }}
+                                {% endif %}
+                            </span>
                         </td>
                         <td>
                             <span class="status-{{ entrega.status_entrega|replace(' ', '-') }}">
@@ -85,7 +177,7 @@
                             </span>
                         </td>
                         <td>
-                            <a href="{{ url_for('editar_entrega', entrega_id=entrega.id) }}" class="btn" style="padding: 6px 12px; font-size: 14px;">
+                            <a href="{{ url_for('editar_entrega', entrega_id=entrega.id) }}" class="btn">
                                 Atualizar
                             </a>
                         </td>
