@@ -7,25 +7,47 @@
     <h1>Painel Administrativo COOPEX</h1>
     <p style="color: #718096; margin-bottom: 20px;">Bem-vindo, {{ session['usuario_nome'] }}!</p>
     
-    <div class="nav-links">
-        <a href="{{ url_for('cadastrar_cooperado') }}">
-            <span style="margin-right: 8px;">👤</span>
-            Cadastrar Cooperado
+    <div class="nav-links" style="margin-bottom: 20px;">
+        <a href="{{ url_for('cadastrar_cooperado') }}" class="btn" style="margin-right:10px;">
+            👤 Cadastrar Cooperado
         </a>
-        <a href="{{ url_for('cadastrar_entrega') }}">
-            <span style="margin-right: 8px;">📦</span>
-            Nova Entrega
+        <a href="{{ url_for('cadastrar_entrega') }}" class="btn" style="margin-right:10px;">
+            📦 Nova Entrega
         </a>
-        <a href="{{ url_for('exportar_entregas') }}" class="btn" style="margin-left: 10px;">
-            <span style="margin-right: 8px;">📊</span>
-            Exportar Entregas
+        <a href="{{ url_for('exportar_entregas') }}" class="btn" style="margin-right:10px;">
+            📊 Exportar Entregas
         </a>
-        <a href="{{ url_for('logout') }}" class="logout">
-            <span style="margin-right: 8px;">🚪</span>
-            Sair
+        <a href="{{ url_for('logout') }}" class="btn btn-danger">
+            🚪 Sair
         </a>
     </div>
 </div>
+
+<style>
+    /* Status Pagamento */
+    .status-pendente {
+        color: #e07c7c; /* vermelho claro */
+        font-weight: bold;
+    }
+    .status-pago {
+        color: #2e7d32; /* verde */
+        font-weight: bold;
+    }
+
+    /* Status Entrega */
+    .status-pendente {
+        color: #e07c7c; /* vermelho claro */
+        font-weight: bold;
+    }
+    .status-em-rota {
+        color: #1976d2; /* azul */
+        font-weight: bold;
+    }
+    .status-entregue {
+        color: #2e7d32; /* verde */
+        font-weight: bold;
+    }
+</style>
 
 <!-- Estatísticas -->
 <section style="margin: 20px 0; padding: 15px; background-color: #f7fafc; border: 1px solid #ccc; border-radius: 8px;">
@@ -55,18 +77,45 @@
     </form>
 </section>
 
+<!-- Lista de cooperados -->
+<section style="margin: 20px 0; padding: 15px; background-color: #f7fafc; border: 1px solid #ccc; border-radius: 8px;">
+    <h2>👥 Cooperados Cadastrados</h2>
+
+    {% if cooperados %}
+        <div class="cooperados-list" style="display: flex; flex-direction: column; gap: 12px;">
+            {% for c in cooperados %}
+                <div style="display: flex; justify-content: space-between; align-items: center; border: 1px solid #ddd; padding: 10px; border-radius: 6px; background: #fff;">
+                    <div>
+                        <strong>{{ c.nome }}</strong>
+                        <div style="color: #718096; font-size: 14px;">Cooperado ativo</div>
+                    </div>
+                    <form action="{{ url_for('excluir_cooperado', cooperado_id=c.id) }}" method="POST" onsubmit="return confirm('Tem certeza que deseja excluir o cooperado {{ c.nome }}? Esta ação não pode ser desfeita.')">
+                        <button type="submit" class="btn btn-danger" style="padding: 6px 12px; font-size: 14px;">
+                            Excluir
+                        </button>
+                    </form>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div style="text-align: center; padding: 40px; color: #718096;">
+            <p>Nenhum cooperado cadastrado ainda.</p>
+            <a href="{{ url_for('cadastrar_cooperado') }}" class="btn" style="margin-top: 15px;">
+                Cadastrar Primeiro Cooperado
+            </a>
+        </div>
+    {% endif %}
+</section>
+
 <!-- Entregas -->
 <section style="margin: 20px 0; padding: 15px; background-color: #f7fafc; border: 1px solid #ccc; border-radius: 8px;">
-    <h2 class="section-title">
-        <span style="margin-right: 10px;">📦</span>
-        Entregas do Dia
-    </h2>
+    <h2>📦 Entregas do Dia</h2>
 
     {% if entregas %}
-        <div class="table-container">
-            <table>
+        <div class="table-container" style="overflow-x:auto;">
+            <table style="width: 100%; border-collapse: collapse;">
                 <thead>
-                    <tr>
+                    <tr style="background-color: #e2e8f0;">
                         <th>ID</th>
                         <th>Descrição</th>
                         <th>Valor</th>
@@ -79,16 +128,24 @@
                 </thead>
                 <tbody>
                     {% for entrega in entregas %}
-                    <tr>
+                    <tr style="border-bottom: 1px solid #ddd;">
                         <td>#{{ entrega.id }}</td>
                         <td>{{ entrega.descricao }}</td>
                         <td>R$ {{ '%.2f' % (entrega.valor or 0) }}</td>
                         <td>{{ entrega.hora_pedido|utc_to_brt }}</td>
                         <td>{{ entrega.cooperado.nome if entrega.cooperado else '---' }}</td>
-                        <td>{{ entrega.status_pagamento }}</td>
-                        <td>{{ entrega.status_entrega }}</td>
                         <td>
-                            <a href="{{ url_for('editar_entrega', entrega_id=entrega.id) }}" class="btn">✏️</a>
+                            <span class="status-{{ entrega.status_pagamento }}">
+                                {{ entrega.status_pagamento.capitalize() }}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="status-{{ entrega.status_entrega|replace(' ', '-') }}">
+                                {{ entrega.status_entrega.capitalize() }}
+                            </span>
+                        </td>
+                        <td>
+                            <a href="{{ url_for('editar_entrega', entrega_id=entrega.id) }}" class="btn" style="margin-right: 5px;">✏️</a>
                             <form action="{{ url_for('excluir_entrega', entrega_id=entrega.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Tem certeza que deseja excluir a entrega #{{ entrega.id }}?')">
                                 <button type="submit" class="btn btn-danger">❌</button>
                             </form>
@@ -108,10 +165,7 @@
 
 <!-- Motoboys em Espera -->
 <section style="margin: 20px 0; padding: 15px; background-color: #f7fafc; border: 1px solid #ccc; border-radius: 8px;">
-    <h2 class="section-title" style="margin-bottom: 10px;">
-        <span style="margin-right: 10px;">🏍️</span>
-        Motoboys em Espera
-    </h2>
+    <h2 style="margin-bottom: 10px;">🏍️ Motoboys em Espera</h2>
 
     <div id="lista-motoboys"></div>
     <button id="add-motoboy" class="btn" style="margin-top: 10px;">+ Adicionar Motoboy</button>
