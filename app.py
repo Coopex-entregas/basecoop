@@ -1,6 +1,6 @@
 import os
 import json
-from flask import Flask, render_template, request, redirect, url_for, session, flash, Response, send_file
+from flask import Flask, render_template, request, redirect, url_for, session, flash, send_file
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, time, timezone
 from models import db, Usuario, Entrega
@@ -224,11 +224,12 @@ def cadastrar_entrega():
         hora_str = request.form["hora_pedido"]
         coop_id = request.form.get("cooperado_id")
         try:
-            # Ajustando o fuso horário para São Paulo aqui
+            # Ajuste aqui para fuso horário de São Paulo convertendo string para datetime naive e adicionando UTC
+            # Supondo que o horário vem em local time São Paulo, convertemos para UTC antes de salvar
             brt = pytz.timezone('America/Sao_Paulo')
-            naive_dt = datetime.strptime(hora_str, "%Y-%m-%dT%H:%M")
-            local_dt = brt.localize(naive_dt)
-            hora_pedido = local_dt.astimezone(pytz.utc)
+            dt_local = datetime.strptime(hora_str, "%Y-%m-%dT%H:%M")
+            dt_localized = brt.localize(dt_local)
+            hora_pedido = dt_localized.astimezone(pytz.utc)
         except ValueError:
             flash("Formato de data/hora inválido.", "error")
             return redirect(url_for("cadastrar_entrega"))
@@ -261,10 +262,11 @@ def editar_entrega(entrega_id):
             entrega.descricao = request.form["descricao"]
             entrega.valor = request.form.get("valor", type=float)
             try:
+                # Mesma lógica de fuso horário para editar entrega
                 brt = pytz.timezone('America/Sao_Paulo')
-                naive_dt = datetime.strptime(request.form["hora_pedido"], "%Y-%m-%dT%H:%M")
-                local_dt = brt.localize(naive_dt)
-                entrega.hora_pedido = local_dt.astimezone(pytz.utc)
+                dt_local = datetime.strptime(request.form["hora_pedido"], "%Y-%m-%dT%H:%M")
+                dt_localized = brt.localize(dt_local)
+                entrega.hora_pedido = dt_localized.astimezone(pytz.utc)
             except ValueError:
                 flash("Formato de data/hora inválido.", "error")
                 return redirect(url_for("editar_entrega", entrega_id=entrega_id))
