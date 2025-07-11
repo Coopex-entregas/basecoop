@@ -1,73 +1,52 @@
-{% extends "base.html" %}
-
-{% block title %}Editar Entrega{% endblock %}
-
-{% block content %}
-<div class="container">
-    <h1>Editar Entrega #{{ entrega.id }}</h1>
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Editar Entrega</title>
+</head>
+<body>
+    <h1>Editar Entrega</h1>
 
     <form method="POST">
-        {% if user_tipo == 'adm' %}
-            <div class="form-group">
-                <label for="descricao">Descrição / Cliente:</label>
-                <input type="text" id="descricao" name="descricao" value="{{ entrega.descricao }}" required>
-            </div>
+        {% if user_tipo == "adm" %}
+            <label for="descricao">Cliente:</label>
+            <input type="text" name="descricao" id="descricao" value="{{ entrega.descricao }}" required><br>
 
-            <div class="form-group">
-                <label for="valor">Valor:</label>
-                <input type="number" step="0.01" id="valor" name="valor" value="{{ entrega.valor }}" required>
-            </div>
+            <label for="valor">Valor:</label>
+            <input type="number" step="0.01" name="valor" id="valor" value="{{ entrega.valor }}" required><br>
 
-            <div class="form-group">
-                <label for="cooperado_id">Atribuir a um cooperado:</label>
-                <select id="cooperado_id" name="cooperado_id">
-                    <option value="">-- Não atribuído --</option>
-                    {% for c in cooperados %}
-                        <option value="{{ c.id }}" {% if entrega.cooperado_id == c.id %}selected{% endif %}>{{ c.nome }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-        {% else %}
-            <!-- Para cooperado, mostra descrição, valor e cooperado só como leitura -->
-            <div class="form-group">
-                <label>Descrição / Cliente:</label>
-                <p>{{ entrega.descricao }}</p>
-            </div>
+            <label for="hora_pedido">Hora do Pedido:</label>
+            <input type="datetime-local" name="hora_pedido" id="hora_pedido"
+                   value="{{ entrega.hora_pedido.astimezone().strftime('%Y-%m-%dT%H:%M') }}"><br>
 
-            <div class="form-group">
-                <label>Valor:</label>
-                <p>R$ {{ "%.2f"|format(entrega.valor or 0) }}</p>
-            </div>
-
-            <div class="form-group">
-                <label>Cooperado atribuído:</label>
-                <p>{{ entrega.cooperado.nome if entrega.cooperado else "Não atribuído" }}</p>
-            </div>
+            <label for="cooperado_id">Cooperado:</label>
+            <select name="cooperado_id" id="cooperado_id">
+                <option value="">Não atribuído</option>
+                {% for cooperado in cooperados %}
+                    <option value="{{ cooperado.id }}"
+                        {% if entrega.cooperado_id == cooperado.id %} selected {% endif %}>
+                        {{ cooperado.nome }}
+                    </option>
+                {% endfor %}
+            </select><br>
         {% endif %}
 
-        <!-- Status Pagamento editável para admin e cooperado -->
-        <div class="form-group">
-            <label for="status_pagamento">Status Pagamento:</label>
-            <select id="status_pagamento" name="status_pagamento">
-                <option value="pendente" {% if entrega.status_pagamento == 'pendente' %}selected{% endif %}>Pendente</option>
-                <option value="pago" {% if entrega.status_pagamento == 'pago' %}selected{% endif %}>Pago</option>
-            </select>
-        </div>
+        <label for="status_pagamento">Status Pagamento:</label>
+        <select name="status_pagamento" id="status_pagamento">
+            <option value="pendente" {% if entrega.status_pagamento == 'pendente' %} selected {% endif %}>Pendente</option>
+            <option value="pago" {% if entrega.status_pagamento == 'pago' %} selected {% endif %}>Pago</option>
+        </select><br>
 
-        <!-- Status Entrega editável para ambos -->
-        <div class="form-group">
-            <label for="status_entrega">Status Entrega:</label>
-            <select id="status_entrega" name="status_entrega">
-                <option value="pendente" {% if entrega.status_entrega == 'pendente' %}selected{% endif %}>Pendente</option>
-                <option value="em rota" {% if entrega.status_entrega == 'em rota' %}selected{% endif %}>Em Rota</option>
-                <option value="entregue" {% if entrega.status_entrega == 'entregue' %}selected{% endif %}>Entregue</option>
-            </select>
-        </div>
+        <label for="status_entrega">Status Entrega:</label>
+        <select name="status_entrega" id="status_entrega">
+            <option value="pendente" {% if entrega.status_entrega == 'pendente' %} selected {% endif %}>Pendente</option>
+            <option value="entregue" {% if entrega.status_entrega == 'entregue' %} selected {% endif %}>Entregue</option>
+        </select><br>
 
-        <div class="form-actions" style="margin-top: 20px;">
-            <button type="submit" class="btn btn-success">Salvar Alterações</button>
-            <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Cancelar</a>
-        </div>
+        <button type="submit">Salvar</button>
     </form>
-</div>
-{% endblock %}
+
+    <br>
+    <a href="{{ url_for('dashboard') }}">Voltar</a>
+</body>
+</html>
