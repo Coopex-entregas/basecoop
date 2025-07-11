@@ -1,43 +1,61 @@
 from flask import request, redirect, url_for, flash, render_template, session
 from models import db, Entrega, Usuario
 from datetime import datetime
+import pytz
 
 @app.route('/editar_entrega/<int:entrega_id>', methods=['GET', 'POST'])
 def editar_entrega(entrega_id):
     entrega = Entrega.query.get_or_404(entrega_id)
     user_tipo = session.get('usuario_tipo', 'cooperado')
 
+    # Verifica permissão do cooperado para não editar entrega de outro
+    if user_tipo == 'cooperado' and entrega.cooperado_id != session.get('usuario_id'):
+        flash("Permissão negada.", "error")
+        return redirect(url_for('dashboard_cooperado'))
+
     if request.method == 'POST':
-        # Coleta campos do formulário
         status_pagamento = request.form.get('status_pagamento')
         status_entrega = request.form.get('status_entrega')
 
-        # Apenas admins podem alterar outros campos
+        # Apenas admins podem alterar campos completos
         if user_tipo == 'adm':
             entrega.descricao = request.form.get('descricao', entrega.descricao)
+
             valor = request.form.get('valor')
             try:
                 entrega.valor = float(valor)
             except (ValueError, TypeError):
                 entrega.valor = 0
 
-            cooperado_id = request.form.get('cooperado_id')
-            if cooperado_id:
-                if cooperado_id.isdigit():
-                    entrega.cooperado_id = int(cooperado_id)
-                    entrega.hora_atribuida = datetime.utcnow()
-                else:
-                    entrega.cooperado_id = None
-                    entrega.hora_atribuida = None
+            hora_pedido_str = request.form.get('hora_pedido')
+            if hora_pedido_str:
+                try:
+                    brt = pytz.timezone('America/Sao_Paulo')
+                    hora_local = datetime.strptime(hora_pedido_str, "%Y-%m-%dT%H:%M")
+                    hora_brt = brt.localize(hora_local)
+                    entrega.hora_pedido = hora_brt.astimezone(pytz.utc)
+                except ValueError:
+                    flash("Formato de data/hora inválido.", "error")
+                    return redirect(url_for('editar_entrega', entrega_id=entrega_id))
 
-        # Ambos podem alterar status
+            cooperado_id = request.form.get('cooperado_id')
+            if cooperado_id and cooperado_id.isdigit():
+                entrega.cooperado_id = int(cooperado_id)
+                entrega.hora_atribuida = datetime.utcnow()
+            else:
+                entrega.cooperado_id = None
+                entrega.hora_atribuida = None
+
+        # Ambos podem alterar status de pagamento e entrega
         if status_pagamento in ['pendente', 'pago']:
             entrega.status_pagamento = status_pagamento
+
         if status_entrega in ['pendente', 'em rota', 'entregue']:
             entrega.status_entrega = status_entrega
 
         db.session.commit()
         flash("Entrega atualizada com sucesso.", "success")
+
         if user_tipo == 'adm':
             return redirect(url_for('dashboard'))
         else:
