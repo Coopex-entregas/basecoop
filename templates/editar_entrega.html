@@ -8,27 +8,25 @@ def editar_entrega(entrega_id):
     entrega = Entrega.query.get_or_404(entrega_id)
     user_tipo = session.get('usuario_tipo', 'cooperado')
 
-    # Verifica permissão do cooperado para não editar entrega de outro
+    # Verifica permissão para cooperado não editar entrega de outro
     if user_tipo == 'cooperado' and entrega.cooperado_id != session.get('usuario_id'):
         flash("Permissão negada.", "error")
         return redirect(url_for('dashboard_cooperado'))
 
     if request.method == 'POST':
-        # Coleta campos do formulário
         status_pagamento = request.form.get('status_pagamento')
         status_entrega = request.form.get('status_entrega')
 
-        # Apenas admins podem alterar campos completos
+        # Apenas admin pode editar campos gerais
         if user_tipo == 'adm':
             entrega.descricao = request.form.get('descricao', entrega.descricao)
-
+            
             valor = request.form.get('valor')
             try:
                 entrega.valor = float(valor)
             except (ValueError, TypeError):
                 entrega.valor = 0
 
-            # Atualiza hora do pedido (se fornecida)
             hora_pedido_str = request.form.get('hora_pedido')
             if hora_pedido_str:
                 try:
@@ -40,7 +38,6 @@ def editar_entrega(entrega_id):
                     flash("Formato de data/hora inválido.", "error")
                     return redirect(url_for('editar_entrega', entrega_id=entrega_id))
 
-            # Atualiza cooperado atribuído
             cooperado_id = request.form.get('cooperado_id')
             if cooperado_id and cooperado_id.isdigit():
                 entrega.cooperado_id = int(cooperado_id)
@@ -52,16 +49,16 @@ def editar_entrega(entrega_id):
         # Ambos podem alterar status
         if status_pagamento in ['pendente', 'pago']:
             entrega.status_pagamento = status_pagamento
-
         if status_entrega in ['pendente', 'em rota', 'entregue']:
             entrega.status_entrega = status_entrega
 
         db.session.commit()
         flash("Entrega atualizada com sucesso.", "success")
 
-        return redirect(url_for('dashboard' if user_tipo == 'adm' else 'dashboard_cooperado'))
+        if user_tipo == 'adm':
+            return redirect(url_for('dashboard_admin'))
+        else:
+            return redirect(url_for('dashboard_cooperado'))
 
-    # Carrega lista de cooperados para dropdown, se adm
     cooperados = Usuario.query.filter_by(tipo='cooperado').order_by(Usuario.nome).all() if user_tipo == 'adm' else []
-
     return render_template('editar_entrega.html', entrega=entrega, cooperados=cooperados, user_tipo=user_tipo)
