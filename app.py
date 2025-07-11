@@ -1,14 +1,11 @@
-# app.py
 import os
 import json
-from flask import Flask, render_template, request, redirect, url_for, session, flash, Response, send_file
+from flask import Flask, render_template, request, redirect, url_for, session, flash
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, time, timezone
 from models import db, Usuario, Entrega
-from sqlalchemy import func
 import pytz
-import io
-import pandas as pd
+from sqlalchemy import extract, func
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "sua_chave_secreta_aqui")
@@ -60,4 +57,101 @@ def criar_usuario_padrao():
 def proteger_rotas():
     rotas_protegidas = {
         "dashboard", "logout", "cadastrar_cooperado", "excluir_cooperado",
-        "cadastrar_entrega", "editar_entrega", "excluir_entrega", "exportar_entrega
+        "cadastrar_entrega", "editar_entrega", "excluir_entrega", "exportar_entregas",
+        "motoboys_espera"
+    }
+    if request.endpoint in rotas_protegidas and "usuario_id" not in session:
+        flash("Acesso não autorizado. Faça login para continuar.", "error")
+        return redirect(url_for("login"))
+
+@app.route("/")
+def index():
+    return redirect(url_for("login"))
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        nome = request.form["nome"]
+        senha = request.form["senha"]
+        usuario = Usuario.query.filter_by(nome=nome).first()
+        if usuario and check_password_hash(usuario.senha_hash, senha):
+            session["usuario_id"] = usuario.id
+            session["usuario_nome"] = usuario.nome
+            session["usuario_tipo"] = usuario.tipo
+            flash("Login efetuado com sucesso!", "success")
+            return redirect(url_for("dashboard"))
+        flash("Usuário ou senha incorretos.", "error")
+        return redirect(url_for("login"))
+    return render_template("login.html")
+
+@app.route("/dashboard")
+def dashboard():
+    data_filtro_str = request.args.get('data_filtro')
+
+    if data_filtro_str:
+        try:
+            data_filtro = datetime.strptime(data_filtro_str, '%Y-%m-%d').date()
+        except ValueError:
+            flash("Data inválida para filtro.", "error")
+            return redirect(url_for("dashboard"))
+    else:
+        data_filtro = date.today()
+
+    inicio_dia = datetime.combine(data_filtro, time.min).replace(tzinfo=timezone.utc)
+    fim_dia = datetime.combine(data_filtro, time.max).replace(tzinfo=timezone.utc)
+
+    if session["usuario_tipo"] == "adm":
+        cooperados = Usuario.query.filter_by(tipo="cooperado").all()
+        entregas = Entrega.query.filter(
+            Entrega.hora_pedido >= inicio_dia,
+            Entrega.hora_pedido <= fim_dia
+        ).order_by(Entrega.hora_pedido.desc()).all()
+        lista_espera = carregar_espera()
+
+        ano_atual = date.today().year
+        mes_atual = date.today().month
+
+        total_entregas_ano = db.session.query(func.count(Entrega.id)).filter(
+            extract('year', Entrega.hora_pedido) == ano_atual
+        ).scalar()
+
+        total_valor_mes = db.session.query(func.sum(Entrega.valor)).filter(
+            extract('month', Entrega.hora_pedido) == mes_atual,
+            extract('year', Entrega.hora_pedido) == ano_atual
+        ).scalar() or 0
+
+        total_dia = len(entregas)
+
+        valores_por_cooperado = db.session.query(
+            Usuario.nome,
+            func.sum(Entrega.valor)
+        ).join(Entrega, Entrega.cooperado_id == Usuario.id)
+        valores_por_cooperado = valores_por_cooperado.filter(
+            extract('month', Entrega.hora_pedido) == mes_atual,
+            extract('year', Entrega.hora_pedido) == ano_atual
+        ).group_by(Usuario.nome).all()
+
+        return render_template("dashboard_admin.html",
+                               cooperados=cooperados,
+                               entregas=entregas,
+                               data_filtro=data_filtro_str,
+                               motoboys_espera=lista_espera,
+                               total_valor_mes=total_valor_mes,
+                               total_entregas_ano=total_entregas_ano,
+                               total_dia=total_dia,
+                               valores_por_cooperado=valores_por_cooperado)
+
+    entregas = Entrega.query.filter(
+        Entrega.cooperado_id == session["usuario_id"],
+        Entrega.hora_pedido >= inicio_dia,
+        Entrega.hora_pedido <= fim_dia
+    ).order_by(Entrega.hora_pedido.desc()).all()
+    return render_template("dashboard_cooperado.html", entregas=entregas)
+
+# Configuração inicial ao iniciar o app
+with app.app_context():
+    db.create_all()
+    criar_usuario_padrao()
+
+if __name__ == "__main__":
+    app.run(debug=True)
