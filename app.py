@@ -2,7 +2,7 @@ import os
 import json
 from flask import Flask, render_template, request, redirect, url_for, session, flash, Response, send_file
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, date, time, timezone
+from datetime import datetime, date, time, timezone, timedelta
 from models import db, Usuario, Entrega
 import pytz
 import io
@@ -98,21 +98,31 @@ def dashboard():
     else:
         data_filtro = date.today()
 
-    inicio_dia = datetime.combine(data_filtro, time.min).replace(tzinfo=timezone.utc)
-    fim_dia = datetime.combine(data_filtro, time.max).replace(tzinfo=timezone.utc)
+    # Ajustar para fuso America/Sao_Paulo corretamente
+    brt = pytz.timezone('America/Sao_Paulo')
+    inicio_dia = brt.localize(datetime.combine(data_filtro, time.min))
+    fim_dia = brt.localize(datetime.combine(data_filtro, time.max))
+
+    # Converter para UTC para comparar com dados armazenados em UTC no banco
+    inicio_dia_utc = inicio_dia.astimezone(pytz.utc)
+    fim_dia_utc = fim_dia.astimezone(pytz.utc)
 
     if session["usuario_tipo"] == "adm":
         cooperados = Usuario.query.filter_by(tipo="cooperado").all()
         entregas = Entrega.query.filter(
-            Entrega.hora_pedido >= inicio_dia,
-            Entrega.hora_pedido <= fim_dia
+            Entrega.hora_pedido >= inicio_dia_utc,
+            Entrega.hora_pedido <= fim_dia_utc
         ).order_by(Entrega.hora_pedido.desc()).all()
         lista_espera = carregar_espera()
 
-        # Cálculo dos valores por cooperado no mês atual
         hoje = date.today()
-        inicio_mes = datetime(hoje.year, hoje.month, 1, tzinfo=timezone.utc)
-        fim_mes = datetime(hoje.year, hoje.month + 1 if hoje.month < 12 else 1, 1, tzinfo=timezone.utc) if hoje.month < 12 else datetime(hoje.year + 1, 1, 1, tzinfo=timezone.utc)
+        inicio_mes = brt.localize(datetime(hoje.year, hoje.month, 1, 0, 0, 0))
+        if hoje.month == 12:
+            inicio_mes_prox = brt.localize(datetime(hoje.year + 1, 1, 1, 0, 0, 0))
+        else:
+            inicio_mes_prox = brt.localize(datetime(hoje.year, hoje.month + 1, 1, 0, 0, 0))
+        inicio_mes_utc = inicio_mes.astimezone(pytz.utc)
+        inicio_mes_prox_utc = inicio_mes_prox.astimezone(pytz.utc)
 
         valores_por_cooperado = []
         for c in cooperados:
@@ -120,35 +130,35 @@ def dashboard():
                 db.func.coalesce(db.func.sum(Entrega.valor), 0)
             ).filter(
                 Entrega.cooperado_id == c.id,
-                Entrega.hora_pedido >= inicio_mes,
-                Entrega.hora_pedido < fim_mes
+                Entrega.hora_pedido >= inicio_mes_utc,
+                Entrega.hora_pedido < inicio_mes_prox_utc
             ).scalar()
             valores_por_cooperado.append((c.nome, total))
 
-        # Total ganho no mês
         total_valor_mes = db.session.query(
             db.func.coalesce(db.func.sum(Entrega.valor), 0)
         ).filter(
-            Entrega.hora_pedido >= inicio_mes,
-            Entrega.hora_pedido < fim_mes
+            Entrega.hora_pedido >= inicio_mes_utc,
+            Entrega.hora_pedido < inicio_mes_prox_utc
         ).scalar()
 
-        # Total entregas no dia filtrado
+        inicio_ano = brt.localize(datetime(hoje.year, 1, 1, 0, 0, 0))
+        inicio_ano_utc = inicio_ano.astimezone(pytz.utc)
+        inicio_ano_prox = brt.localize(datetime(hoje.year + 1, 1, 1, 0, 0, 0))
+        inicio_ano_prox_utc = inicio_ano_prox.astimezone(pytz.utc)
+
         total_dia = db.session.query(
             db.func.count(Entrega.id)
         ).filter(
-            Entrega.hora_pedido >= inicio_dia,
-            Entrega.hora_pedido <= fim_dia
+            Entrega.hora_pedido >= inicio_dia_utc,
+            Entrega.hora_pedido <= fim_dia_utc
         ).scalar()
 
-        # Total entregas no ano atual
-        inicio_ano = datetime(hoje.year, 1, 1, tzinfo=timezone.utc)
-        fim_ano = datetime(hoje.year + 1, 1, 1, tzinfo=timezone.utc)
         total_entregas_ano = db.session.query(
             db.func.count(Entrega.id)
         ).filter(
-            Entrega.hora_pedido >= inicio_ano,
-            Entrega.hora_pedido < fim_ano
+            Entrega.hora_pedido >= inicio_ano_utc,
+            Entrega.hora_pedido < inicio_ano_prox_utc
         ).scalar()
 
         return render_template(
@@ -166,8 +176,8 @@ def dashboard():
     # Para cooperados comuns, mostrar só suas entregas do dia filtrado
     entregas = Entrega.query.filter(
         Entrega.cooperado_id == session["usuario_id"],
-        Entrega.hora_pedido >= inicio_dia,
-        Entrega.hora_pedido <= fim_dia
+        Entrega.hora_pedido >= inicio_dia_utc,
+        Entrega.hora_pedido <= fim_dia_utc
     ).order_by(Entrega.hora_pedido.desc()).all()
     return render_template("dashboard_cooperado.html", entregas=entregas, data_filtro=data_filtro_str)
 
