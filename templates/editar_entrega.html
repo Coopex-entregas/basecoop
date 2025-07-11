@@ -2,24 +2,91 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Editar Entrega</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 1rem;
+            background-color: #f7f7f7;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+
+        form {
+            max-width: 500px;
+            margin: 0 auto;
+            background: #fff;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.05);
+        }
+
+        label {
+            display: block;
+            margin-top: 1rem;
+            font-weight: bold;
+        }
+
+        input[type="text"],
+        input[type="number"],
+        input[type="datetime-local"],
+        select {
+            width: 100%;
+            padding: 0.7rem;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            margin-top: 0.3rem;
+        }
+
+        button {
+            margin-top: 2rem;
+            width: 100%;
+            padding: 1rem;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #218838;
+        }
+
+        a {
+            display: block;
+            text-align: center;
+            margin-top: 2rem;
+            color: #007bff;
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+    </style>
 </head>
 <body>
     <h1>Editar Entrega</h1>
 
     <form method="POST">
         {% if user_tipo == "adm" %}
-            <label for="descricao">Cliente:</label>
-            <input type="text" name="descricao" id="descricao" value="{{ entrega.descricao }}" required><br>
+            <label for="descricao">Cliente</label>
+            <input type="text" name="descricao" id="descricao" value="{{ entrega.descricao }}" required>
 
-            <label for="valor">Valor:</label>
-            <input type="number" step="0.01" name="valor" id="valor" value="{{ entrega.valor }}" required><br>
+            <label for="valor">Valor</label>
+            <input type="number" step="0.01" name="valor" id="valor" value="{{ entrega.valor }}" required>
 
-            <label for="hora_pedido">Hora do Pedido:</label>
+            <label for="hora_pedido">Hora do Pedido</label>
             <input type="datetime-local" name="hora_pedido" id="hora_pedido"
-                   value="{{ entrega.hora_pedido.astimezone().strftime('%Y-%m-%dT%H:%M') }}"><br>
+                   value="{{ entrega.hora_pedido.astimezone().strftime('%Y-%m-%dT%H:%M') }}">
 
-            <label for="cooperado_id">Cooperado:</label>
+            <label for="cooperado_id">Cooperado</label>
             <select name="cooperado_id" id="cooperado_id">
                 <option value="">Não atribuído</option>
                 {% for cooperado in cooperados %}
@@ -28,25 +95,24 @@
                         {{ cooperado.nome }}
                     </option>
                 {% endfor %}
-            </select><br>
+            </select>
         {% endif %}
 
-        <label for="status_pagamento">Status Pagamento:</label>
+        <label for="status_pagamento">Status Pagamento</label>
         <select name="status_pagamento" id="status_pagamento">
             <option value="pendente" {% if entrega.status_pagamento == 'pendente' %} selected {% endif %}>Pendente</option>
             <option value="pago" {% if entrega.status_pagamento == 'pago' %} selected {% endif %}>Pago</option>
-        </select><br>
+        </select>
 
-        <label for="status_entrega">Status Entrega:</label>
+        <label for="status_entrega">Status Entrega</label>
         <select name="status_entrega" id="status_entrega">
             <option value="pendente" {% if entrega.status_entrega == 'pendente' %} selected {% endif %}>Pendente</option>
             <option value="entregue" {% if entrega.status_entrega == 'entregue' %} selected {% endif %}>Entregue</option>
-        </select><br>
+        </select>
 
         <button type="submit">Salvar</button>
     </form>
 
-    <br>
     <a href="{{ url_for('dashboard') }}">Voltar</a>
 </body>
 </html>
