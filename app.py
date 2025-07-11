@@ -2,7 +2,7 @@ import os
 import json
 from flask import Flask, render_template, request, redirect, url_for, session, flash, Response, send_file
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, date, time, timezone, timedelta
+from datetime import datetime, date, time, timezone
 from models import db, Usuario, Entrega
 import pytz
 import io
@@ -89,9 +89,6 @@ def login():
 def dashboard():
     data_filtro_str = request.args.get('data_filtro')
 
-    utc = pytz.utc
-    brt = pytz.timezone('America/Sao_Paulo')
-
     if data_filtro_str:
         try:
             data_filtro = datetime.strptime(data_filtro_str, '%Y-%m-%d').date()
@@ -99,16 +96,10 @@ def dashboard():
             flash("Data inválida para filtro.", "error")
             return redirect(url_for("dashboard"))
     else:
-        hoje_brt = datetime.now(brt).date()
-        data_filtro = hoje_brt
+        data_filtro = date.today()
 
-    inicio_brt = datetime.combine(data_filtro, time.min)
-    inicio_brt = brt.localize(inicio_brt)
-    inicio_dia = inicio_brt.astimezone(utc)
-
-    fim_brt = datetime.combine(data_filtro, time.max)
-    fim_brt = brt.localize(fim_brt)
-    fim_dia = fim_brt.astimezone(utc)
+    inicio_dia = datetime.combine(data_filtro, time.min).replace(tzinfo=timezone.utc)
+    fim_dia = datetime.combine(data_filtro, time.max).replace(tzinfo=timezone.utc)
 
     if session["usuario_tipo"] == "adm":
         cooperados = Usuario.query.filter_by(tipo="cooperado").all()
@@ -118,15 +109,10 @@ def dashboard():
         ).order_by(Entrega.hora_pedido.desc()).all()
         lista_espera = carregar_espera()
 
-        hoje_brt = datetime.now(brt)
-        inicio_mes_brt = brt.localize(datetime(hoje_brt.year, hoje_brt.month, 1))
-        if hoje_brt.month == 12:
-            fim_mes_brt = brt.localize(datetime(hoje_brt.year + 1, 1, 1))
-        else:
-            fim_mes_brt = brt.localize(datetime(hoje_brt.year, hoje_brt.month + 1, 1))
-
-        inicio_mes_utc = inicio_mes_brt.astimezone(utc)
-        fim_mes_utc = fim_mes_brt.astimezone(utc)
+        # Cálculo dos valores por cooperado no mês atual
+        hoje = date.today()
+        inicio_mes = datetime(hoje.year, hoje.month, 1, tzinfo=timezone.utc)
+        fim_mes = datetime(hoje.year, hoje.month + 1 if hoje.month < 12 else 1, 1, tzinfo=timezone.utc) if hoje.month < 12 else datetime(hoje.year + 1, 1, 1, tzinfo=timezone.utc)
 
         valores_por_cooperado = []
         for c in cooperados:
@@ -134,18 +120,20 @@ def dashboard():
                 db.func.coalesce(db.func.sum(Entrega.valor), 0)
             ).filter(
                 Entrega.cooperado_id == c.id,
-                Entrega.hora_pedido >= inicio_mes_utc,
-                Entrega.hora_pedido < fim_mes_utc
+                Entrega.hora_pedido >= inicio_mes,
+                Entrega.hora_pedido < fim_mes
             ).scalar()
             valores_por_cooperado.append((c.nome, total))
 
+        # Total ganho no mês
         total_valor_mes = db.session.query(
             db.func.coalesce(db.func.sum(Entrega.valor), 0)
         ).filter(
-            Entrega.hora_pedido >= inicio_mes_utc,
-            Entrega.hora_pedido < fim_mes_utc
+            Entrega.hora_pedido >= inicio_mes,
+            Entrega.hora_pedido < fim_mes
         ).scalar()
 
+        # Total entregas no dia filtrado
         total_dia = db.session.query(
             db.func.count(Entrega.id)
         ).filter(
@@ -153,16 +141,14 @@ def dashboard():
             Entrega.hora_pedido <= fim_dia
         ).scalar()
 
-        inicio_ano_brt = brt.localize(datetime(hoje_brt.year, 1, 1))
-        fim_ano_brt = brt.localize(datetime(hoje_brt.year + 1, 1, 1))
-        inicio_ano_utc = inicio_ano_brt.astimezone(utc)
-        fim_ano_utc = fim_ano_brt.astimezone(utc)
-
+        # Total entregas no ano atual
+        inicio_ano = datetime(hoje.year, 1, 1, tzinfo=timezone.utc)
+        fim_ano = datetime(hoje.year + 1, 1, 1, tzinfo=timezone.utc)
         total_entregas_ano = db.session.query(
             db.func.count(Entrega.id)
         ).filter(
-            Entrega.hora_pedido >= inicio_ano_utc,
-            Entrega.hora_pedido < fim_ano_utc
+            Entrega.hora_pedido >= inicio_ano,
+            Entrega.hora_pedido < fim_ano
         ).scalar()
 
         return render_template(
@@ -177,6 +163,7 @@ def dashboard():
             total_entregas_ano=total_entregas_ano
         )
 
+    # Para cooperados comuns, mostrar só suas entregas do dia filtrado
     entregas = Entrega.query.filter(
         Entrega.cooperado_id == session["usuario_id"],
         Entrega.hora_pedido >= inicio_dia,
@@ -239,10 +226,7 @@ def cadastrar_entrega():
         hora_str = request.form["hora_pedido"]
         coop_id = request.form.get("cooperado_id")
         try:
-            hora_pedido_local = datetime.strptime(hora_str, "%Y-%m-%dT%H:%M")
-            brt = pytz.timezone('America/Sao_Paulo')
-            hora_pedido_localized = brt.localize(hora_pedido_local)
-            hora_pedido = hora_pedido_localized.astimezone(pytz.utc)
+            hora_pedido = datetime.strptime(hora_str, "%Y-%m-%dT%H:%M").replace(tzinfo=timezone.utc)
         except ValueError:
             flash("Formato de data/hora inválido.", "error")
             return redirect(url_for("cadastrar_entrega"))
@@ -254,7 +238,7 @@ def cadastrar_entrega():
             status_pagamento="pendente",
             status_entrega="pendente",
             cooperado_id=int(coop_id) if coop_id else None,
-            hora_atribuida=datetime.now(pytz.utc) if coop_id else None
+            hora_atribuida=datetime.now(timezone.utc) if coop_id else None
         )
         db.session.add(entrega)
         db.session.commit()
@@ -275,18 +259,15 @@ def editar_entrega(entrega_id):
             entrega.descricao = request.form["descricao"]
             entrega.valor = request.form.get("valor", type=float)
             try:
-                hora_pedido_local = datetime.strptime(
+                entrega.hora_pedido = datetime.strptime(
                     request.form["hora_pedido"], "%Y-%m-%dT%H:%M"
-                )
-                brt = pytz.timezone('America/Sao_Paulo')
-                hora_pedido_localized = brt.localize(hora_pedido_local)
-                entrega.hora_pedido = hora_pedido_localized.astimezone(pytz.utc)
+                ).brt = pytz.timezone('America/Sao_Paulo')
             except ValueError:
                 flash("Formato de data/hora inválido.", "error")
                 return redirect(url_for("editar_entrega", entrega_id=entrega_id))
             coop_id = request.form.get("cooperado_id")
             entrega.cooperado_id = int(coop_id) if coop_id else None
-            entrega.hora_atribuida = datetime.now(pytz.utc) if coop_id else None
+            entrega.hora_atribuida = datetime.now(timezone.utc) if coop_id else None
             entrega.status_pagamento = request.form["status_pagamento"]
             entrega.status_entrega = request.form["status_entrega"]
         else:
