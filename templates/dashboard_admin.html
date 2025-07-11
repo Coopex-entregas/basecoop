@@ -44,7 +44,7 @@
 
     <h2>📦 Entregas do Dia</h2>
     {% if entregas %}
-        <table border="1">
+        <table border="1" cellpadding="5" cellspacing="0">
             <thead>
                 <tr>
                     <th>Descrição</th>
@@ -60,7 +60,7 @@
                 {% for entrega in entregas %}
                 <tr>
                     <td>{{ entrega.descricao }}</td>
-                    <td>R$ {{ '%.2f' % entrega.valor }}</td>
+                    <td>R$ {{ '%.2f' % (entrega.valor or 0) }}</td>
                     <td>{{ entrega.hora_pedido|utc_to_brt }}</td>
                     <td>{{ entrega.cooperado.nome if entrega.cooperado else '---' }}</td>
                     <td>{{ entrega.status_pagamento }}</td>
