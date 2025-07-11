@@ -1,99 +1,79 @@
-from flask import Flask, render_template, request, redirect, session, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, flash, session
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime
-import os
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
-app.secret_key = 'sua_chave_secreta_aqui'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///coopex.db'
+app.secret_key = "supersecretkey"  # Troque para algo seguro
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///db.sqlite3'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
-# MODELOS
+# Modelo Usuário
 class Usuario(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    nome = db.Column(db.String(100), nullable=False)
-    email = db.Column(db.String(100), unique=True, nullable=False)
-    senha = db.Column(db.String(100), nullable=False)
-    tipo = db.Column(db.String(20), nullable=False)  # "admin" ou "cooperado"
+    nome = db.Column(db.String(150), unique=True, nullable=False)
+    senha_hash = db.Column(db.String(200), nullable=False)
 
-class Entrega(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    descricao = db.Column(db.String(200))
-    valor = db.Column(db.Float)
-    hora_pedido = db.Column(db.DateTime)
-    hora_atribuida = db.Column(db.DateTime)
-    cooperado_id = db.Column(db.Integer, db.ForeignKey('usuario.id'))
-    status_pagamento = db.Column(db.String(50))  # pago, pendente, etc.
-    status_entrega = db.Column(db.String(50))    # entregue, pendente, etc.
+    def set_senha(self, senha):
+        self.senha_hash = generate_password_hash(senha)
 
-# ROTAS
+    def check_senha(self, senha):
+        return check_password_hash(self.senha_hash, senha)
+
+# Rota Home
 @app.route('/')
-def index():
+def home():
+    if 'user_id' in session:
+        return redirect(url_for('dashboard'))
     return redirect(url_for('login'))
 
+# Rota Login
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        email = request.form['email']
-        senha = request.form['senha']
-        usuario = Usuario.query.filter_by(email=email, senha=senha).first()
-        if usuario:
-            session['usuario_id'] = usuario.id
-            session['usuario_nome'] = usuario.nome
-            session['usuario_tipo'] = usuario.tipo
+        nome = request.form.get('nome')
+        senha = request.form.get('senha')
+        if not nome or not senha:
+            flash('Preencha nome e senha.')
+            return redirect(url_for('login'))
+
+        usuario = Usuario.query.filter_by(nome=nome).first()
+        if usuario and usuario.check_senha(senha):
+            session['user_id'] = usuario.id
+            session['user_nome'] = usuario.nome
             return redirect(url_for('dashboard'))
         else:
-            flash('Credenciais inválidas')
+            flash('Nome ou senha incorretos.')
+            return redirect(url_for('login'))
+
     return render_template('login.html')
 
+# Rota Dashboard (área protegida)
+@app.route('/dashboard')
+def dashboard():
+    if 'user_id' not in session:
+        flash('Faça login antes.')
+        return redirect(url_for('login'))
+    return f"Olá, {session['user_nome']}! Bem-vindo ao painel."
+
+# Rota Logout
 @app.route('/logout')
 def logout():
     session.clear()
+    flash('Você saiu do sistema.')
     return redirect(url_for('login'))
 
-@app.route('/dashboard')
-def dashboard():
-    if 'usuario_id' not in session:
-        return redirect(url_for('login'))
-
-    hoje = datetime.now().date()
-    ano = datetime.now().year
-    mes = datetime.now().month
-
-    total_hoje = Entrega.query.filter(db.func.date(Entrega.hora_pedido) == hoje).count()
-    total_ano = Entrega.query.filter(db.extract('year', Entrega.hora_pedido) == ano).count()
-
-    entregas_mes = Entrega.query.filter(db.extract('month', Entrega.hora_pedido) == mes,
-                                        db.extract('year', Entrega.hora_pedido) == ano).all()
-
-    total_mes = sum(e.valor for e in entregas_mes if e.valor)
-
-    ganhos_por_cooperado = {}
-    for entrega in entregas_mes:
-        if entrega.cooperado_id:
-            usuario = Usuario.query.get(entrega.cooperado_id)
-            if usuario:
-                ganhos_por_cooperado.setdefault(usuario.nome, 0)
-                ganhos_por_cooperado[usuario.nome] += entrega.valor or 0
-
-    return render_template('dashboard_admin.html',
-                           total_hoje=total_hoje,
-                           total_ano=total_ano,
-                           total_mes=total_mes,
-                           ganhos_por_cooperado=ganhos_por_cooperado)
-
-# Função opcional para criar admin padrão
-def criar_usuario_padrao():
-    if not Usuario.query.filter_by(email='admin@admin.com').first():
-        admin = Usuario(nome='Admin', email='admin@admin.com', senha='admin', tipo='admin')
+# Criar banco e usuário admin de teste
+@app.before_first_request
+def criar_banco():
+    db.create_all()
+    admin = Usuario.query.filter_by(nome='admin').first()
+    if not admin:
+        admin = Usuario(nome='admin')
+        admin.set_senha('123456')
         db.session.add(admin)
         db.session.commit()
 
-# Execução
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
-        criar_usuario_padrao()
     app.run(debug=True)
