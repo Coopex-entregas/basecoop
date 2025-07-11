@@ -36,37 +36,6 @@
 
 <div class="content">
 
-    <!-- Estatísticas Gerais -->
-    <div class="dashboard-estatisticas" style="margin-bottom: 30px; padding: 15px; border: 1px solid #e2e8f0; border-radius: 6px; background-color: #f9fafb;">
-      <h2>Resumo das Entregas</h2>
-
-      <div style="display: flex; gap: 40px; flex-wrap: wrap;">
-        <div>
-          <h3>Valor Geral do Mês</h3>
-          <p><strong>R$ {{ "%.2f"|format(valor_geral_mes or 0) }}</strong></p>
-        </div>
-        <div>
-          <h3>Entregas no Dia ({{ now().strftime("%d/%m/%Y") }})</h3>
-          <p><strong>{{ entregas_hoje or 0 }}</strong></p>
-        </div>
-        <div>
-          <h3>Entregas no Ano</h3>
-          <p><strong>{{ entregas_ano or 0 }}</strong></p>
-        </div>
-      </div>
-
-      <h3 style="margin-top: 30px;">Valor por Cooperado no Mês</h3>
-      {% if cooperados_valor_mes %}
-        <ul style="list-style: none; padding-left: 0;">
-          {% for c in cooperados_valor_mes %}
-            <li style="margin-bottom: 5px;">{{ c.nome }}: <strong>R$ {{ "%.2f"|format(c.total_valor or 0) }}</strong></li>
-          {% endfor %}
-        </ul>
-      {% else %}
-        <p>Nenhum dado disponível.</p>
-      {% endif %}
-    </div>
-
     <!-- Seção de Cooperados -->
     <h2 class="section-title">
         <span style="margin-right: 10px;">👥</span>

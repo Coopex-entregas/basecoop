@@ -1,13 +1,12 @@
 import os
 import json
-from flask import Flask, render_template, request, redirect, url_for, session, flash, send_file
+from flask import Flask, render_template, request, redirect, url_for, session, flash, Response, send_file
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, date, time, timezone, timedelta
+from datetime import datetime, date, time, timezone
 from models import db, Usuario, Entrega
 import pytz
 import io
 import pandas as pd
-from sqlalchemy import func
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "sua_chave_secreta_aqui")
@@ -102,65 +101,19 @@ def dashboard():
     inicio_dia = datetime.combine(data_filtro, time.min).replace(tzinfo=timezone.utc)
     fim_dia = datetime.combine(data_filtro, time.max).replace(tzinfo=timezone.utc)
 
-    # Definir início e fim do mês
-    inicio_mes = datetime(data_filtro.year, data_filtro.month, 1, tzinfo=timezone.utc)
-    if data_filtro.month == 12:
-        fim_mes = datetime(data_filtro.year + 1, 1, 1, tzinfo=timezone.utc) - timedelta(seconds=1)
-    else:
-        fim_mes = datetime(data_filtro.year, data_filtro.month + 1, 1, tzinfo=timezone.utc) - timedelta(seconds=1)
-
-    # Definir início e fim do ano
-    inicio_ano = datetime(data_filtro.year, 1, 1, tzinfo=timezone.utc)
-    fim_ano = datetime(data_filtro.year + 1, 1, 1, tzinfo=timezone.utc) - timedelta(seconds=1)
-
     if session["usuario_tipo"] == "adm":
         cooperados = Usuario.query.filter_by(tipo="cooperado").all()
         entregas = Entrega.query.filter(
             Entrega.hora_pedido >= inicio_dia,
             Entrega.hora_pedido <= fim_dia
         ).order_by(Entrega.hora_pedido.desc()).all()
-
         lista_espera = carregar_espera()
-
-        # Valor geral no mês
-        valor_geral_mes = db.session.query(func.coalesce(func.sum(Entrega.valor), 0.0)).filter(
-            Entrega.hora_pedido >= inicio_mes,
-            Entrega.hora_pedido <= fim_mes
-        ).scalar()
-
-        # Total entregas no dia
-        total_entregas_dia = db.session.query(func.count(Entrega.id)).filter(
-            Entrega.hora_pedido >= inicio_dia,
-            Entrega.hora_pedido <= fim_dia
-        ).scalar()
-
-        # Total entregas no ano
-        total_entregas_ano = db.session.query(func.count(Entrega.id)).filter(
-            Entrega.hora_pedido >= inicio_ano,
-            Entrega.hora_pedido <= fim_ano
-        ).scalar()
-
-        # Valor por cooperado no mês
-        valores_por_cooperado = db.session.query(
-            Usuario.nome,
-            func.coalesce(func.sum(Entrega.valor), 0.0)
-        ).join(Entrega, Entrega.cooperado_id == Usuario.id).filter(
-            Entrega.hora_pedido >= inicio_mes,
-            Entrega.hora_pedido <= fim_mes,
-            Usuario.tipo == 'cooperado'
-        ).group_by(Usuario.id).all()
-
         return render_template("dashboard_admin.html",
                                cooperados=cooperados,
                                entregas=entregas,
                                data_filtro=data_filtro_str,
-                               motoboys_espera=lista_espera,
-                               valor_geral_mes=valor_geral_mes,
-                               total_entregas_dia=total_entregas_dia,
-                               total_entregas_ano=total_entregas_ano,
-                               valores_por_cooperado=valores_por_cooperado)
+                               motoboys_espera=lista_espera)
 
-    # Caso usuário seja cooperado, mostra só as entregas dele no dia
     entregas = Entrega.query.filter(
         Entrega.cooperado_id == session["usuario_id"],
         Entrega.hora_pedido >= inicio_dia,
@@ -347,3 +300,4 @@ with app.app_context():
 
 if __name__ == "__main__":
     app.run(debug=True)
+
