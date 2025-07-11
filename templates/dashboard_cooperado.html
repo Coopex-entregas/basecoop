@@ -1,104 +1,85 @@
 {% extends "base.html" %}
 
-{% block title %}Painel do Cooperado{% endblock %}
+{% block title %}Painel do Cooperado - Coopex{% endblock %}
 
 {% block content %}
 <div class="header">
-    <h1>Dashboard do Cooperado</h1>
-    <p style="color: #718096; margin-bottom: 20px;">Bem-vindo, {{ session['usuario_nome'] }}!</p>
-
-    <div class="nav-links">
-        <a href="{{ url_for('logout') }}" class="logout">
-            <span style="margin-right: 8px;">🚪</span>
-            Sair
-        </a>
-    </div>
+    <h1>Bem-vindo, {{ session['usuario_nome'] }}</h1>
+    <a href="{{ url_for('logout') }}" class="logout">
+        <span style="margin-right: 8px;">🚪</span> Sair
+    </a>
 </div>
 
+<!-- Filtro de data -->
+<form method="get" action="{{ url_for('dashboard') }}" style="margin: 20px 0;">
+  <label for="data_filtro">Filtrar por data:</label>
+  <input type="date" id="data_filtro" name="data_filtro" value="{{ data_filtro or '' }}">
+  <button type="submit">Filtrar</button>
+</form>
+
 <div class="content">
-    <h2 class="section-title">
-        <span style="margin-right: 10px;">📦</span>
-        Minhas Entregas
-    </h2>
+
+    <h2 class="section-title">Minhas Entregas</h2>
 
     {% if entregas %}
-        <!-- Resumo de status -->
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px;">
-            {% set pendentes = entregas|selectattr("status_entrega", "equalto", "pendente")|list|length %}
-            {% set em_rota = entregas|selectattr("status_entrega", "equalto", "em rota")|list|length %}
-            {% set entregues = entregas|selectattr("status_entrega", "equalto", "entregue")|list|length %}
-
-            <div style="background: #fed7d7; padding: 20px; border-radius: 8px; text-align: center;">
-                <div style="font-size: 2rem; font-weight: bold; color: #c53030;">{{ pendentes }}</div>
-                <div style="color: #c53030; font-weight: 600;">Pendentes</div>
-            </div>
-
-            <div style="background: #feebc8; padding: 20px; border-radius: 8px; text-align: center;">
-                <div style="font-size: 2rem; font-weight: bold; color: #c05621;">{{ em_rota }}</div>
-                <div style="color: #c05621; font-weight: 600;">Em Rota</div>
-            </div>
-
-            <div style="background: #c6f6d5; padding: 20px; border-radius: 8px; text-align: center;">
-                <div style="font-size: 2rem; font-weight: bold; color: #22543d;">{{ entregues }}</div>
-                <div style="color: #22543d; font-weight: 600;">Entregues</div>
-            </div>
-        </div>
-
-        <!-- Tabela de entregas -->
-        <div class="table-container">
-            <table>
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Descrição</th>
-                        <th>Valor</th>  <!-- Coluna Valor adicionada -->
-                        <th>Data/Hora</th>
-                        <th>Status Pagamento</th>
-                        <th>Status Entrega</th>
-                        <th>Ações</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for entrega in entregas %}
-                    <tr>
-                        <td>#{{ entrega.id }}</td>
-                        <td>{{ entrega.descricao }}</td>
-                        <td>R$ {{ "%.2f"|format(entrega.valor or 0) }}</td>  <!-- Valor exibido -->
-                        <td>{{ entrega.hora_pedido.strftime('%d/%m/%Y %H:%M') }}</td>
-                        <td>
-                            {% if entrega.status_pagamento == 'pago' %}
-                                <span style="color: #22543d; font-weight: 600;">Pago</span>
-                            {% else %}
-                                <span style="color: #c53030; font-weight: 600;">Pendente</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            <span class="status-{{ entrega.status_entrega|replace(' ', '-') }}">
-                                {% if entrega.status_entrega == 'pendente' %}
-                                    Pendente
-                                {% elif entrega.status_entrega == 'em rota' %}
-                                    Em Rota
-                                {% else %}
-                                    Entregue
-                                {% endif %}
-                            </span>
-                        </td>
-                        <td>
-                            <a href="{{ url_for('editar_entrega', entrega_id=entrega.id) }}" class="btn" style="padding: 6px 12px; font-size: 14px;">
-                                Atualizar
-                            </a>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Cliente</th>
+                <th>Valor</th>
+                <th>Hora do Pedido</th>
+                <th>Hora Atribuída</th>
+                <th>Status Pagamento</th>
+                <th>Status Entrega</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for e in entregas %}
+            <tr>
+                <td><strong>#{{ e.id }}</strong></td>
+                <td>{{ e.descricao }}</td>
+                <td><strong>R$ {{ "%.2f"|format(e.valor or 0) }}</strong></td>
+                <td>{{ e.hora_pedido|utc_to_brt }}</td>  {# **Aqui está o filtro que corrige a hora** #}
+                <td>
+                    {% if e.hora_atribuida %}
+                        {{ e.hora_atribuida|utc_to_brt }}
+                    {% else %}
+                        <span style="color: #718096;">-</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <span class="status-{{ e.status_pagamento }}">
+                        {% if e.status_pagamento == 'pendente' %}
+                            Pendente
+                        {% else %}
+                            Pago
+                        {% endif %}
+                    </span>
+                </td>
+                <td>
+                    <span class="status-{{ e.status_entrega|replace(' ', '-') }}">
+                        {% if e.status_entrega == 'pendente' %}
+                            Pendente
+                        {% elif e.status_entrega == 'em rota' %}
+                            Em Rota
+                        {% else %}
+                            Entregue
+                        {% endif %}
+                    </span>
+                </td>
+                <td>
+                    <a href="{{ url_for('editar_entrega', entrega_id=e.id) }}" class="btn" style="padding: 6px 12px; font-size: 14px;">
+                        Editar
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
     {% else %}
-        <div style="text-align: center; padding: 60px; color: #718096;">
-            <div style="font-size: 4rem; margin-bottom: 20px;">📦</div>
-            <h3 style="margin-bottom: 10px;">Nenhuma entrega atribuída</h3>
-            <p>Aguarde novas entregas serem atribuídas a você pelo administrador.</p>
-        </div>
+    <p>Nenhuma entrega encontrada para o período selecionado.</p>
     {% endif %}
 </div>
 {% endblock %}
