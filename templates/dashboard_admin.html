@@ -69,12 +69,7 @@
         <input type="date" id="data_filtro" name="data_filtro" value="{{ data_filtro or '' }}">
         <button type="submit" class="btn">Filtrar</button>
     </form>
-</section>
-
-<!-- Lista de cooperados -->
-<section style="margin: 20px 0; padding: 15px; background-color: #f7fafc; border: 1px solid #ccc; border-radius: 8px;">
-    <h2>👥 Cooperados Cadastrados</h2>
-
+</section>   
     {% if cooperados_admin %}
         <div class="cooperados-list" style="display: flex; flex-direction: column; gap: 12px;">
             {% for c in cooperados_admin %}

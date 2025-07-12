@@ -1,413 +1,211 @@
 import os
-import json
-from flask import Flask, render_template, request, redirect, url_for, session, flash, Response, send_file, abort
-from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, date, time, timezone
-from models import db, Usuario, Entrega
-import pytz
-import io
-import pandas as pd
+from flask import Flask, render_template, request, redirect, session, url_for, flash, jsonify
+from flask_sqlalchemy import SQLAlchemy
+from datetime import datetime
+from pytz import timezone
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "sua_chave_secreta_aqui")
+app.secret_key = 'coopex2024'
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///instance/banco.db')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
-    "DATABASE_URL", "sqlite:///entregas.db"
-)
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+db = SQLAlchemy(app)
 
-db.init_app(app)
+from models import Usuario, Entrega
 
-ESPERA_FILE = 'motoboys_espera.json'
-
-def carregar_espera():
-    if os.path.exists(ESPERA_FILE):
-        with open(ESPERA_FILE, 'r', encoding='utf-8') as f:
-            try:
-                return json.load(f)
-            except json.JSONDecodeError:
-                return []
-    return []
-
-def salvar_espera(lista):
-    with open(ESPERA_FILE, 'w', encoding='utf-8') as f:
-        json.dump(lista, f, ensure_ascii=False)
-
-def utc_to_brt(value):
-    if not value:
+# Filtro para converter UTC para horário de Brasília
+@app.template_filter('utc_to_brt')
+def utc_to_brt(utc_dt):
+    if not utc_dt:
         return ''
-    utc = pytz.utc
-    brt = pytz.timezone('America/Sao_Paulo')
-    if value.tzinfo is None:
-        value_utc = utc.localize(value)
-    else:
-        value_utc = value
-    value_brt = value_utc.astimezone(brt)
-    return value_brt.strftime('%d/%m/%Y %H:%M')
+    br_tz = timezone('America/Sao_Paulo')
+    return utc_dt.astimezone(br_tz).strftime('%d/%m/%Y %H:%M')
 
-app.jinja_env.filters['utc_to_brt'] = utc_to_brt
+# ---------------- ROTAS ---------------- #
 
-def criar_usuario_padrao():
-    if not Usuario.query.filter_by(nome="coopex").first():
-        senha_hash = generate_password_hash("05062721")
-        user = Usuario(nome="coopex", senha_hash=senha_hash, tipo="adm")
-        db.session.add(user)
-        db.session.commit()
-
-@app.before_request
-def proteger_rotas():
-    rotas_protegidas = {
-        "dashboard", "logout", "cadastrar_cooperado", "excluir_cooperado",
-        "cadastrar_entrega", "editar_entrega", "excluir_entrega", "exportar_entregas",
-        "motoboys_espera", "cadastrar_ou_editar_cooperado"
-    }
-    if request.endpoint in rotas_protegidas and "usuario_id" not in session:
-        flash("Acesso não autorizado. Faça login para continuar.", "error")
-        return redirect(url_for("login"))
-
-@app.route("/")
+@app.route('/')
 def index():
-    return redirect(url_for("login"))
+    return redirect(url_for('login'))
 
-@app.route("/login", methods=["GET", "POST"])
+@app.route('/login', methods=['GET', 'POST'])
 def login():
-    if request.method == "POST":
-        nome = request.form["nome"]
-        senha = request.form["senha"]
+    if request.method == 'POST':
+        nome = request.form['nome']
+        senha = request.form['senha']
         usuario = Usuario.query.filter_by(nome=nome).first()
-        if usuario and check_password_hash(usuario.senha_hash, senha):
-            session["usuario_id"] = usuario.id
-            session["usuario_nome"] = usuario.nome
-            session["usuario_tipo"] = usuario.tipo
-            flash("Login efetuado com sucesso!", "success")
-            return redirect(url_for("dashboard"))
-        flash("Usuário ou senha incorretos.", "error")
-        return redirect(url_for("login"))
-    return render_template("login.html")
-
-@app.route("/dashboard")
-def dashboard():
-    data_filtro_str = request.args.get('data_filtro')
-
-    if data_filtro_str:
-        try:
-            data_filtro = datetime.strptime(data_filtro_str, '%Y-%m-%d').date()
-        except ValueError:
-            flash("Data inválida para filtro.", "error")
-            return redirect(url_for("dashboard"))
-    else:
-        data_filtro = date.today()
-
-    inicio_dia = datetime.combine(data_filtro, time.min).replace(tzinfo=timezone.utc)
-    fim_dia = datetime.combine(data_filtro, time.max).replace(tzinfo=timezone.utc)
-
-    if session["usuario_tipo"] == "adm":
-        # NÃO listar cooperados na tabela no dashboard
-        entregas = Entrega.query.filter(
-            Entrega.hora_pedido >= inicio_dia,
-            Entrega.hora_pedido <= fim_dia
-        ).order_by(Entrega.hora_pedido.desc()).all()
-        lista_espera = carregar_espera()
-
-        hoje = date.today()
-        inicio_mes = datetime(hoje.year, hoje.month, 1, tzinfo=timezone.utc)
-        if hoje.month < 12:
-            fim_mes = datetime(hoje.year, hoje.month + 1, 1, tzinfo=timezone.utc)
+        if usuario and usuario.senha == senha:
+            session['usuario_id'] = usuario.id
+            session['usuario_nome'] = usuario.nome
+            session['usuario_tipo'] = usuario.tipo
+            return redirect(url_for('dashboard'))
         else:
-            fim_mes = datetime(hoje.year + 1, 1, 1, tzinfo=timezone.utc)
+            flash('Nome ou senha inválidos')
+            return redirect(url_for('login'))
+    return render_template('login.html')
 
-        # Mapeia valor total por cooperado para mostrar ganhos mensais no dashboard admin
-        cooperados = Usuario.query.filter_by(tipo="cooperado").all()
-        valores_por_cooperado = []
-        for c in cooperados:
-            total = db.session.query(
-                db.func.coalesce(db.func.sum(Entrega.valor), 0)
-            ).filter(
-                Entrega.cooperado_id == c.id,
-                Entrega.hora_pedido >= inicio_mes,
-                Entrega.hora_pedido < fim_mes
-            ).scalar()
-            valores_por_cooperado.append((c.nome, total))
-
-        total_valor_mes = db.session.query(
-            db.func.coalesce(db.func.sum(Entrega.valor), 0)
-        ).filter(
-            Entrega.hora_pedido >= inicio_mes,
-            Entrega.hora_pedido < fim_mes
-        ).scalar()
-
-        total_dia = db.session.query(
-            db.func.count(Entrega.id)
-        ).filter(
-            Entrega.hora_pedido >= inicio_dia,
-            Entrega.hora_pedido <= fim_dia
-        ).scalar()
-
-        inicio_ano = datetime(hoje.year, 1, 1, tzinfo=timezone.utc)
-        fim_ano = datetime(hoje.year + 1, 1, 1, tzinfo=timezone.utc)
-        total_entregas_ano = db.session.query(
-            db.func.count(Entrega.id)
-        ).filter(
-            Entrega.hora_pedido >= inicio_ano,
-            Entrega.hora_pedido < fim_ano
-        ).scalar()
-
-        return render_template(
-            "dashboard_admin.html",
-            entregas=entregas,
-            data_filtro=data_filtro_str,
-            motoboys_espera=lista_espera,
-            valores_por_cooperado=valores_por_cooperado,
-            total_valor_mes=total_valor_mes,
-            total_dia=total_dia,
-            total_entregas_ano=total_entregas_ano
-        )
-
-    # Cooperado normal vê só suas entregas
-    entregas = Entrega.query.filter(
-        Entrega.cooperado_id == session["usuario_id"],
-        Entrega.hora_pedido >= inicio_dia,
-        Entrega.hora_pedido <= fim_dia
-    ).order_by(Entrega.hora_pedido.desc()).all()
-
-    # Adiciona cálculo dos ganhos diário e mensal para o cooperado
-    hoje = date.today()
-    inicio_mes = datetime(hoje.year, hoje.month, 1, tzinfo=timezone.utc)
-    if hoje.month < 12:
-        fim_mes = datetime(hoje.year, hoje.month + 1, 1, tzinfo=timezone.utc)
-    else:
-        fim_mes = datetime(hoje.year + 1, 1, 1, tzinfo=timezone.utc)
-
-    total_valor_dia = db.session.query(
-        db.func.coalesce(db.func.sum(Entrega.valor), 0)
-    ).filter(
-        Entrega.cooperado_id == session["usuario_id"],
-        Entrega.hora_pedido >= inicio_dia,
-        Entrega.hora_pedido <= fim_dia
-    ).scalar()
-
-    total_valor_mes = db.session.query(
-        db.func.coalesce(db.func.sum(Entrega.valor), 0)
-    ).filter(
-        Entrega.cooperado_id == session["usuario_id"],
-        Entrega.hora_pedido >= inicio_mes,
-        Entrega.hora_pedido < fim_mes
-    ).scalar()
-
-    return render_template(
-        "dashboard_cooperado.html",
-        entregas=entregas,
-        data_filtro=data_filtro_str,
-        total_valor_dia=total_valor_dia,
-        total_valor_mes=total_valor_mes
-    )
-
-@app.route("/logout")
+@app.route('/logout')
 def logout():
     session.clear()
-    flash("Logout realizado com sucesso.", "success")
-    return redirect(url_for("login"))
+    return redirect(url_for('login'))
 
-@app.route("/cooperado", methods=["GET", "POST"], defaults={"cooperado_id": None})
-@app.route("/cooperado/<int:cooperado_id>", methods=["GET", "POST"])
-def cadastrar_ou_editar_cooperado(cooperado_id):
-    if session.get("usuario_tipo") != "adm":
-        flash("Acesso restrito a administradores.", "error")
-        return redirect(url_for("dashboard"))
-    
-    cooperado = None
-    if cooperado_id:
-        cooperado = Usuario.query.filter_by(id=cooperado_id, tipo="cooperado").first()
-        if not cooperado:
-            flash("Cooperado não encontrado.", "error")
-            return redirect(url_for("dashboard"))
-    
-    if request.method == "POST":
-        nome = request.form["nome"].strip()
-        senha = request.form.get("senha", "").strip()
+@app.route('/dashboard')
+def dashboard():
+    if 'usuario_id' not in session:
+        return redirect(url_for('login'))
 
-        # Verifica nome único
-        existe = Usuario.query.filter(Usuario.nome == nome)
-        if cooperado_id:
-            existe = existe.filter(Usuario.id != cooperado_id)
-        existe = existe.first()
-        if existe:
-            flash("Nome já cadastrado, escolha outro.", "error")
-            return redirect(request.url)
+    tipo = session['usuario_tipo']
+    data_filtro = request.args.get('data_filtro')
+    hoje = datetime.now(timezone('America/Sao_Paulo')).date()
 
-        if cooperado:
-            # Editar
-            cooperado.nome = nome
-            if senha:
-                cooperado.senha_hash = generate_password_hash(senha)
-            db.session.commit()
-            flash("Cooperado atualizado com sucesso!", "success")
-        else:
-            # Novo
-            if not senha:
-                flash("Senha é obrigatória para novo cooperado.", "error")
-                return redirect(request.url)
-            senha_hash = generate_password_hash(senha)
-            novo = Usuario(nome=nome, senha_hash=senha_hash, tipo="cooperado")
+    if data_filtro:
+        try:
+            data_obj = datetime.strptime(data_filtro, '%Y-%m-%d').date()
+        except:
+            data_obj = hoje
+    else:
+        data_obj = hoje
+
+    if tipo == 'admin':
+        entregas = Entrega.query.filter(
+            db.func.date(Entrega.hora_pedido) == data_obj
+        ).order_by(Entrega.hora_pedido.desc()).all()
+
+        total_dia = len(entregas)
+        total_entregas_ano = Entrega.query.filter(
+            db.extract('year', Entrega.hora_pedido) == hoje.year
+        ).count()
+
+        total_valor_mes = db.session.query(db.func.sum(Entrega.valor)).filter(
+            db.extract('month', Entrega.hora_pedido) == hoje.month,
+            db.extract('year', Entrega.hora_pedido) == hoje.year
+        ).scalar() or 0.0
+
+        valores_por_cooperado = db.session.query(
+            Usuario.nome, db.func.sum(Entrega.valor)
+        ).join(Entrega).filter(
+            db.extract('month', Entrega.hora_pedido) == hoje.month,
+            db.extract('year', Entrega.hora_pedido) == hoje.year
+        ).group_by(Usuario.nome).all()
+
+        cooperados = Usuario.query.filter_by(tipo='cooperado').all()
+
+        return render_template(
+            'dashboard_admin.html',
+            entregas=entregas,
+            total_dia=total_dia,
+            total_entregas_ano=total_entregas_ano,
+            total_valor_mes=total_valor_mes,
+            valores_por_cooperado=valores_por_cooperado,
+            cooperados=cooperados,
+            data_filtro=data_filtro,
+            motoboys_espera=session.get('motoboys_espera', [])
+        )
+    else:
+        usuario_id = session['usuario_id']
+        entregas = Entrega.query.filter_by(cooperado_id=usuario_id).filter(
+            db.func.date(Entrega.hora_pedido) == data_obj
+        ).order_by(Entrega.hora_pedido.desc()).all()
+
+        total_valor_mes = db.session.query(db.func.sum(Entrega.valor)).filter_by(cooperado_id=usuario_id).filter(
+            db.extract('month', Entrega.hora_pedido) == hoje.month,
+            db.extract('year', Entrega.hora_pedido) == hoje.year
+        ).scalar() or 0.0
+
+        total_valor_dia = db.session.query(db.func.sum(Entrega.valor)).filter_by(cooperado_id=usuario_id).filter(
+            db.func.date(Entrega.hora_pedido) == hoje
+        ).scalar() or 0.0
+
+        return render_template(
+            'dashboard_cooperado.html',
+            entregas=entregas,
+            total_valor_mes=total_valor_mes,
+            total_valor_dia=total_valor_dia,
+            data_filtro=data_filtro
+        )
+
+@app.route('/cadastrar_cooperado', methods=['GET', 'POST'])
+def cadastrar_ou_editar_cooperado():
+    if request.method == 'POST':
+        nome = request.form['nome']
+        senha = request.form['senha']
+        if nome and senha:
+            novo = Usuario(nome=nome, senha=senha, tipo='cooperado')
             db.session.add(novo)
             db.session.commit()
-            flash("Cooperado cadastrado com sucesso!", "success")
-        return redirect(url_for("dashboard"))
+            flash('Cooperado cadastrado com sucesso!')
+        return redirect(url_for('cadastrar_ou_editar_cooperado'))
+    
+    cooperados = Usuario.query.filter_by(tipo='cooperado').all()
+    return render_template('cadastrar_cooperado.html', cooperados=cooperados)
 
-    return render_template("cadastrar_cooperado.html", cooperado=cooperado)
-
-@app.route("/excluir_cooperado/<int:cooperado_id>", methods=["POST"])
+@app.route('/excluir_cooperado/<int:cooperado_id>', methods=['POST'])
 def excluir_cooperado(cooperado_id):
-    if session.get("usuario_tipo") != "adm":
-        flash("Acesso restrito.", "error")
-        return redirect(url_for("dashboard"))
-
-    coop = Usuario.query.filter_by(id=cooperado_id, tipo="cooperado").first()
-    if not coop:
-        flash("Cooperado não encontrado.", "error")
-        return redirect(url_for("dashboard"))
-    Entrega.query.filter_by(cooperado_id=coop.id).delete()
-    db.session.delete(coop)
+    cooperado = Usuario.query.get_or_404(cooperado_id)
+    db.session.delete(cooperado)
     db.session.commit()
-    flash(f"Cooperado '{coop.nome}' excluído com sucesso!", "success")
-    return redirect(url_for("dashboard"))
+    flash(f"Cooperado {cooperado.nome} excluído com sucesso.")
+    return redirect(url_for('cadastrar_ou_editar_cooperado'))
 
-@app.route("/cadastrar_entrega", methods=["GET", "POST"])
+@app.route('/cadastrar_entrega', methods=['GET', 'POST'])
 def cadastrar_entrega():
-    if session.get("usuario_tipo") != "adm":
-        flash("Acesso restrito.", "error")
-        return redirect(url_for("dashboard"))
+    cooperados = Usuario.query.filter_by(tipo='cooperado').all()
+    if request.method == 'POST':
+        descricao = request.form['descricao']
+        valor = float(request.form['valor'] or 0)
+        hora_pedido = datetime.utcnow()
+        hora_atribuida = datetime.utcnow()
+        cooperado_id = int(request.form['cooperado_id'])
+        status_pagamento = request.form['status_pagamento']
+        status_entrega = request.form['status_entrega']
 
-    cooperados = Usuario.query.filter_by(tipo="cooperado").all()
-    if request.method == "POST":
-        descricao = request.form["cliente"]
-        valor = request.form.get("valor", type=float)
-        hora_str = request.form["hora_pedido"]
-        coop_id = request.form.get("cooperado_id")
-        try:
-            naive_dt = datetime.strptime(hora_str, "%Y-%m-%dT%H:%M")
-            tz = pytz.timezone('America/Sao_Paulo')
-            hora_pedido = tz.localize(naive_dt).astimezone(pytz.utc)
-        except ValueError:
-            flash("Formato de data/hora inválido.", "error")
-            return redirect(url_for("cadastrar_entrega"))
-
-        entrega = Entrega(
+        nova = Entrega(
             descricao=descricao,
             valor=valor,
             hora_pedido=hora_pedido,
-            status_pagamento="pendente",
-            status_entrega="pendente",
-            cooperado_id=int(coop_id) if coop_id else None,
-            hora_atribuida=datetime.now(timezone.utc) if coop_id else None
+            hora_atribuida=hora_atribuida,
+            cooperado_id=cooperado_id,
+            status_pagamento=status_pagamento,
+            status_entrega=status_entrega
         )
-        db.session.add(entrega)
+        db.session.add(nova)
         db.session.commit()
-        flash("Entrega cadastrada com sucesso!", "success")
-        return redirect(url_for("dashboard"))
+        return redirect(url_for('dashboard'))
+    return render_template('cadastrar_entrega.html', cooperados=cooperados)
 
-    return render_template("cadastrar_entrega.html", cooperados=cooperados)
-
-@app.route("/editar_entrega/<int:entrega_id>", methods=["GET", "POST"])
+@app.route('/editar_entrega/<int:entrega_id>', methods=['GET', 'POST'])
 def editar_entrega(entrega_id):
     entrega = Entrega.query.get_or_404(entrega_id)
-    if (session["usuario_tipo"] == "cooperado" and entrega.cooperado_id != session["usuario_id"]):
-        flash("Permissão negada.", "error")
-        return redirect(url_for("dashboard"))
-
-    if request.method == "POST":
-        if session["usuario_tipo"] == "adm":
-            entrega.descricao = request.form["descricao"]
-            entrega.valor = request.form.get("valor", type=float)
-            try:
-                naive_dt = datetime.strptime(request.form["hora_pedido"], "%Y-%m-%dT%H:%M")
-                tz = pytz.timezone('America/Sao_Paulo')
-                entrega.hora_pedido = tz.localize(naive_dt).astimezone(pytz.utc)
-            except ValueError:
-                flash("Formato de data/hora inválido.", "error")
-                return redirect(url_for("editar_entrega", entrega_id=entrega_id))
-            coop_id = request.form.get("cooperado_id")
-            entrega.cooperado_id = int(coop_id) if coop_id else None
-            entrega.hora_atribuida = datetime.now(timezone.utc) if coop_id else None
-            entrega.status_pagamento = request.form["status_pagamento"]
-            entrega.status_entrega = request.form["status_entrega"]
-        else:
-            entrega.status_pagamento = request.form["status_pagamento"]
-            entrega.status_entrega = request.form["status_entrega"]
+    cooperados = Usuario.query.filter_by(tipo='cooperado').all()
+    if request.method == 'POST':
+        entrega.descricao = request.form['descricao']
+        entrega.valor = float(request.form['valor'] or 0)
+        entrega.hora_atribuida = datetime.utcnow()
+        entrega.cooperado_id = int(request.form['cooperado_id'])
+        entrega.status_pagamento = request.form['status_pagamento']
+        entrega.status_entrega = request.form['status_entrega']
         db.session.commit()
-        flash("Entrega atualizada com sucesso!", "success")
-        return redirect(url_for("dashboard"))
+        return redirect(url_for('dashboard'))
+    return render_template('editar_entrega.html', entrega=entrega, cooperados=cooperados)
 
-    cooperados = (Usuario.query.filter_by(tipo="cooperado").all()
-                  if session["usuario_tipo"] == "adm" else [])
-    return render_template("editar_entrega.html",
-                           entrega=entrega,
-                           cooperados=cooperados,
-                           user_tipo=session["usuario_tipo"])
-
-@app.route("/excluir_entrega/<int:entrega_id>", methods=["POST"])
+@app.route('/excluir_entrega/<int:entrega_id>', methods=['POST'])
 def excluir_entrega(entrega_id):
-    if session.get("usuario_tipo") != "adm":
-        flash("Acesso restrito.", "error")
-        return redirect(url_for("dashboard"))
     entrega = Entrega.query.get_or_404(entrega_id)
     db.session.delete(entrega)
     db.session.commit()
-    flash(f"Entrega #{entrega_id} excluída com sucesso!", "success")
-    return redirect(url_for("dashboard"))
+    return redirect(url_for('dashboard'))
 
-@app.route("/exportar_entregas")
+@app.route('/exportar_entregas')
 def exportar_entregas():
-    if session.get("usuario_tipo") != "adm":
-        flash("Acesso restrito.", "error")
-        return redirect(url_for("dashboard"))
-    entregas = Entrega.query.all()
+    from export_excel import exportar_entregas_para_excel
+    return exportar_entregas_para_excel()
 
-    dados = []
-    for e in entregas:
-        dados.append({
-            "Nome do Cliente": e.descricao,
-            "Hora do Pedido": utc_to_brt(e.hora_pedido),
-            "Hora Atribuída": utc_to_brt(e.hora_atribuida),
-            "Valor (R$)": f"{e.valor:.2f}" if e.valor else "0.00",
-            "Cooperado": e.cooperado.nome if e.cooperado else "Não atribuído",
-            "Status Pagamento": e.status_pagamento.capitalize(),
-            "Status Entrega": e.status_entrega.capitalize(),
-        })
+@app.route('/motoboys_espera', methods=['POST'])
+def salvar_motoboys():
+    data = request.get_json()
+    session['motoboys_espera'] = data.get('motoboys', [])
+    return jsonify({'status': 'ok'})
 
-    df = pd.DataFrame(dados)
+# ---------------- FIM ---------------- #
 
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        df.to_excel(writer, index=False, sheet_name='Entregas')
-
-    output.seek(0)
-    return send_file(
-        output,
-        as_attachment=True,
-        download_name='entregas.xlsx',
-        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    )
-
-@app.route("/motoboys_espera", methods=["GET", "POST"])
-def motoboys_espera():
-    if session.get("usuario_tipo") != "adm":
-        flash("Acesso restrito a administradores.", "error")
-        return redirect(url_for("dashboard"))
-
-    if request.method == "POST":
-        dados = request.get_json()
-        lista = dados.get("motoboys", [])
-        lista = [nome.strip() for nome in lista if nome.strip()]
-        salvar_espera(lista)
-        return {"status": "ok"}
-
-    lista_atual = carregar_espera()
-    return {"motoboys": lista_atual}
-
-with app.app_context():
-    db.create_all()
-    criar_usuario_padrao()
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run(debug=True)
