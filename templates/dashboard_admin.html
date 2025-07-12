@@ -233,3 +233,238 @@
 </section>
 
 {% endblock %}
+extends "base.html" %}
+
+{% block title %}Painel Administrativo - Coopex{% endblock %}
+
+{% block content %}
+<div class="header">
+    <h1>Painel Administrativo COOPEX</h1>
+    <p style="color: #718096; margin-bottom: 20px;">Bem-vindo, {{ session['usuario_nome'] }}!</p>
+    
+    <div class="nav-links" style="margin-bottom: 20px;">
+        <a href="{{ url_for('cadastrar_cooperado') }}" class="btn" style="margin-right:10px;">
+            👤 Cadastrar Cooperado
+        </a>
+        <a href="{{ url_for('cadastrar_entrega') }}" class="btn" style="margin-right:10px;">
+            📦 Nova Entrega
+        </a>
+        <a href="{{ url_for('exportar_entregas') }}" class="btn" style="margin-right:10px;">
+            📊 Exportar Entregas
+        </a>
+        <a href="{{ url_for('logout') }}" class="btn btn-danger">
+            🚪 Sair
+        </a>
+    </div>
+</div>
+
+<style>
+    /* Status Pagamento */
+    .status-pendente {
+        color: #e07c7c; /* vermelho claro */
+        font-weight: bold;
+    }
+    .status-pago {
+        color: #2e7d32; /* verde */
+        font-weight: bold;
+    }
+
+    /* Status Entrega */
+    .status-pendente {
+        color: #e07c7c; /* vermelho claro */
+        font-weight: bold;
+    }
+    .status-em-rota {
+        color: #1976d2; /* azul */
+        font-weight: bold;
+    }
+    .status-entregue {
+        color: #2e7d32; /* verde */
+        font-weight: bold;
+    }
+</style>
+
+<!-- Estatísticas -->
+<section style="margin: 20px 0; padding: 15px; background-color: #f7fafc; border: 1px solid #ccc; border-radius: 8px;">
+    <h2>📊 Estatísticas Gerais</h2>
+    <p><strong>Total de entregas hoje:</strong> {{ total_dia }}</p>
+    <p><strong>Total de entregas no ano:</strong> {{ total_entregas_ano }}</p>
+    <p><strong>Total ganho no mês:</strong> R$ {{ '%.2f' % total_valor_mes }}</p>
+
+    <h3>💰 Ganhos por Cooperado no Mês</h3>
+    {% if valores_por_cooperado %}
+        <ul>
+            {% for nome, valor in valores_por_cooperado %}
+                <li>{{ nome }}: R$ {{ '%.2f' % valor }}</li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p>Nenhum ganho registrado este mês.</p>
+    {% endif %}
+</section>
+
+<!-- Filtro de data -->
+<section style="margin: 20px 0; padding: 15px; background-color: #f7fafc; border: 1px solid #ccc; border-radius: 8px;">
+    <form method="get" action="{{ url_for('dashboard') }}">
+        <label for="data_filtro">Filtrar por data:</label>
+        <input type="date" id="data_filtro" name="data_filtro" value="{{ data_filtro or '' }}">
+        <button type="submit" class="btn">Filtrar</button>
+    </form>
+</section>
+
+<!-- Lista de cooperados -->
+<section style="margin: 20px 0; padding: 15px; background-color: #f7fafc; border: 1px solid #ccc; border-radius: 8px;">
+    <h2>👥 Cooperados Cadastrados</h2>
+
+    {% if cooperados %}
+        <div class="cooperados-list" style="display: flex; flex-direction: column; gap: 12px;">
+            {% for c in cooperados %}
+                <div style="display: flex; justify-content: space-between; align-items: center; border: 1px solid #ddd; padding: 10px; border-radius: 6px; background: #fff;">
+                    <div>
+                        <strong>{{ c.nome }}</strong>
+                        <div style="color: #718096; font-size: 14px;">Cooperado ativo</div>
+                    </div>
+                    <form action="{{ url_for('excluir_cooperado', cooperado_id=c.id) }}" method="POST" onsubmit="return confirm('Tem certeza que deseja excluir o cooperado {{ c.nome }}? Esta ação não pode ser desfeita.')">
+                        <button type="submit" class="btn btn-danger" style="padding: 6px 12px; font-size: 14px;">
+                            Excluir
+                        </button>
+                    </form>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div style="text-align: center; padding: 40px; color: #718096;">
+            <p>Nenhum cooperado cadastrado ainda.</p>
+            <a href="{{ url_for('cadastrar_cooperado') }}" class="btn" style="margin-top: 15px;">
+                Cadastrar Primeiro Cooperado
+            </a>
+        </div>
+    {% endif %}
+</section>
+
+<!-- Entregas -->
+<section style="margin: 20px 0; padding: 15px; background-color: #f7fafc; border: 1px solid #ccc; border-radius: 8px;">
+    <h2>📦 Entregas do Dia</h2>
+
+    {% if entregas %}
+        <div class="table-container" style="overflow-x:auto;">
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="background-color: #e2e8f0;">
+                        <th>ID</th>
+                        <th>Descrição</th>
+                        <th>Valor</th>
+                        <th>Hora do Pedido</th>
+                        <th>Hora Atribuída</th>
+                        <th>Cooperado</th>
+                        <th>Status Pagamento</th>
+                        <th>Status Entrega</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entrega in entregas %}
+                    <tr style="border-bottom: 1px solid #ddd;">
+                        <td>#{{ entrega.id }}</td>
+                        <td>{{ entrega.descricao }}</td>
+                        <td>R$ {{ '%.2f' % (entrega.valor or 0) }}</td>
+                        <td>{{ entrega.hora_pedido|utc_to_brt }}</td>
+                        <td>{{ entrega.hora_atribuida|utc_to_brt }}</td>
+                        <td>{{ entrega.cooperado.nome if entrega.cooperado else '---' }}</td>
+                        <td>
+                            <span class="status-{{ entrega.status_pagamento }}">
+                                {{ entrega.status_pagamento.capitalize() }}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="status-{{ entrega.status_entrega|replace(' ', '-') }}">
+                                {{ entrega.status_entrega.capitalize() }}
+                            </span>
+                        </td>
+                        <td>
+                            <a href="{{ url_for('editar_entrega', entrega_id=entrega.id) }}" class="btn" style="margin-right: 5px;">✏️</a>
+                            <form action="{{ url_for('excluir_entrega', entrega_id=entrega.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Tem certeza que deseja excluir a entrega #{{ entrega.id }}?')">
+                                <button type="submit" class="btn btn-danger">❌</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div style="text-align: center; padding: 20px; color: #718096;">
+            <p>🚫 Nenhuma entrega registrada para este dia.</p>
+            <a href="{{ url_for('cadastrar_entrega') }}" class="btn" style="margin-top: 15px;">Cadastrar Primeira Entrega</a>
+        </div>
+    {% endif %}
+</section>
+
+<!-- Motoboys em Espera -->
+<section style="margin: 20px 0; padding: 15px; background-color: #f7fafc; border: 1px solid #ccc; border-radius: 8px;">
+    <h2 style="margin-bottom: 10px;">🏍️ Motoboys em Espera</h2>
+
+    <div id="lista-motoboys"></div>
+    <button id="add-motoboy" class="btn" style="margin-top: 10px;">+ Adicionar Motoboy</button>
+    <button id="limpar-motoboys" class="btn btn-danger" style="margin-top: 10px; margin-left: 10px;">Limpar Tudo</button>
+
+    <script>
+      const listaDiv = document.getElementById('lista-motoboys');
+      const btnAdd = document.getElementById('add-motoboy');
+      const btnLimpar = document.getElementById('limpar-motoboys');
+
+      let motoboys = {{ motoboys_espera|tojson|safe }};
+
+      function salvarLista() {
+        fetch('/motoboys_espera', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ motoboys })
+        }).then(resp => resp.json())
+          .then(data => {
+            if(data.status !== 'ok') alert('Erro ao salvar lista!');
+          });
+      }
+
+      function renderLista() {
+        listaDiv.innerHTML = '';
+        motoboys.forEach((nome, idx) => {
+          const input = document.createElement('input');
+          input.type = 'text';
+          input.value = nome;
+          input.placeholder = 'Nome do motoboy';
+          input.style.marginBottom = '5px';
+          input.style.width = '300px';
+          input.oninput = () => {
+            motoboys[idx] = input.value;
+            if(input.value.trim() === '') {
+              motoboys.splice(idx, 1);
+              renderLista();
+              salvarLista();
+            } else {
+              salvarLista();
+            }
+          };
+          listaDiv.appendChild(input);
+          listaDiv.appendChild(document.createElement('br'));
+        });
+      }
+
+      btnAdd.onclick = () => {
+        motoboys.push('');
+        renderLista();
+      };
+
+      btnLimpar.onclick = () => {
+        if(confirm('Deseja limpar toda a lista de motoboys em espera?')) {
+          motoboys = [];
+          renderLista();
+          salvarLista();
+        }
+      };
+
+      renderLista();
+    </script>
+</section>
+
+{% endblock %}
