@@ -1,6 +1,6 @@
 import os
 import json
-from flask import Flask, render_template, request, redirect, url_for, session, flash, Response, send_file
+from flask import Flask, render_template, request, redirect, url_for, session, flash, Response, send_file, abort
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, time, timezone
 from models import db, Usuario, Entrega
@@ -59,7 +59,7 @@ def proteger_rotas():
     rotas_protegidas = {
         "dashboard", "logout", "cadastrar_cooperado", "excluir_cooperado",
         "cadastrar_entrega", "editar_entrega", "excluir_entrega", "exportar_entregas",
-        "motoboys_espera"
+        "motoboys_espera", "cadastrar_ou_editar_cooperado"
     }
     if request.endpoint in rotas_protegidas and "usuario_id" not in session:
         flash("Acesso não autorizado. Faça login para continuar.", "error")
@@ -102,7 +102,7 @@ def dashboard():
     fim_dia = datetime.combine(data_filtro, time.max).replace(tzinfo=timezone.utc)
 
     if session["usuario_tipo"] == "adm":
-        cooperados = Usuario.query.filter_by(tipo="cooperado").all()
+        # NÃO listar cooperados na tabela no dashboard
         entregas = Entrega.query.filter(
             Entrega.hora_pedido >= inicio_dia,
             Entrega.hora_pedido <= fim_dia
@@ -116,6 +116,8 @@ def dashboard():
         else:
             fim_mes = datetime(hoje.year + 1, 1, 1, tzinfo=timezone.utc)
 
+        # Mapeia valor total por cooperado para mostrar ganhos mensais no dashboard admin
+        cooperados = Usuario.query.filter_by(tipo="cooperado").all()
         valores_por_cooperado = []
         for c in cooperados:
             total = db.session.query(
@@ -152,7 +154,6 @@ def dashboard():
 
         return render_template(
             "dashboard_admin.html",
-            cooperados=cooperados,
             entregas=entregas,
             data_filtro=data_filtro_str,
             motoboys_espera=lista_espera,
@@ -162,13 +163,14 @@ def dashboard():
             total_entregas_ano=total_entregas_ano
         )
 
-    # === ACRESCENTEI APENAS ESSA PARTE PARA COOPERADO ===
+    # Cooperado normal vê só suas entregas
     entregas = Entrega.query.filter(
         Entrega.cooperado_id == session["usuario_id"],
         Entrega.hora_pedido >= inicio_dia,
         Entrega.hora_pedido <= fim_dia
     ).order_by(Entrega.hora_pedido.desc()).all()
 
+    # Adiciona cálculo dos ganhos diário e mensal para o cooperado
     hoje = date.today()
     inicio_mes = datetime(hoje.year, hoje.month, 1, tzinfo=timezone.utc)
     if hoje.month < 12:
@@ -206,25 +208,53 @@ def logout():
     flash("Logout realizado com sucesso.", "success")
     return redirect(url_for("login"))
 
-@app.route("/cadastrar_cooperado", methods=["GET", "POST"])
-def cadastrar_cooperado():
+@app.route("/cooperado", methods=["GET", "POST"], defaults={"cooperado_id": None})
+@app.route("/cooperado/<int:cooperado_id>", methods=["GET", "POST"])
+def cadastrar_ou_editar_cooperado(cooperado_id):
     if session.get("usuario_tipo") != "adm":
         flash("Acesso restrito a administradores.", "error")
         return redirect(url_for("dashboard"))
-
+    
+    cooperado = None
+    if cooperado_id:
+        cooperado = Usuario.query.filter_by(id=cooperado_id, tipo="cooperado").first()
+        if not cooperado:
+            flash("Cooperado não encontrado.", "error")
+            return redirect(url_for("dashboard"))
+    
     if request.method == "POST":
-        nome = request.form["nome"]
-        senha = request.form["senha"]
-        if Usuario.query.filter_by(nome=nome).first():
+        nome = request.form["nome"].strip()
+        senha = request.form.get("senha", "").strip()
+
+        # Verifica nome único
+        existe = Usuario.query.filter(Usuario.nome == nome)
+        if cooperado_id:
+            existe = existe.filter(Usuario.id != cooperado_id)
+        existe = existe.first()
+        if existe:
             flash("Nome já cadastrado, escolha outro.", "error")
-            return redirect(url_for("cadastrar_cooperado"))
-        senha_hash = generate_password_hash(senha)
-        novo = Usuario(nome=nome, senha_hash=senha_hash, tipo="cooperado")
-        db.session.add(novo)
-        db.session.commit()
-        flash("Cooperado cadastrado com sucesso!", "success")
+            return redirect(request.url)
+
+        if cooperado:
+            # Editar
+            cooperado.nome = nome
+            if senha:
+                cooperado.senha_hash = generate_password_hash(senha)
+            db.session.commit()
+            flash("Cooperado atualizado com sucesso!", "success")
+        else:
+            # Novo
+            if not senha:
+                flash("Senha é obrigatória para novo cooperado.", "error")
+                return redirect(request.url)
+            senha_hash = generate_password_hash(senha)
+            novo = Usuario(nome=nome, senha_hash=senha_hash, tipo="cooperado")
+            db.session.add(novo)
+            db.session.commit()
+            flash("Cooperado cadastrado com sucesso!", "success")
         return redirect(url_for("dashboard"))
-    return render_template("cadastrar_cooperado.html")
+
+    return render_template("cadastrar_cooperado.html", cooperado=cooperado)
 
 @app.route("/excluir_cooperado/<int:cooperado_id>", methods=["POST"])
 def excluir_cooperado(cooperado_id):

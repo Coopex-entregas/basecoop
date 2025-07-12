@@ -1,100 +1,96 @@
 {% extends "base.html" %}
 
-{% block title %}Painel Cooperado - Coopex{% endblock %}
+{% block title %}Dashboard Cooperado - Coopex{% endblock %}
 
 {% block content %}
-<div class="header">
-    <h1>Painel Cooperado COOPEX</h1>
-    <p style="color: #718096; margin-bottom: 20px;">Bem-vindo, {{ session['usuario_nome'] }}!</p>
-
-    <!-- Ganhos do Dia e Mês -->
-    <div style="margin-bottom: 20px; padding: 10px; background-color: #f7fafc; border: 1px solid #ccc; border-radius: 6px; max-width: 400px;">
-        <strong>Ganhos do Dia:</strong> R$ {{ '%.2f' % total_valor_dia }}<br>
-        <strong>Ganhos do Mês:</strong> R$ {{ '%.2f' % total_valor_mes }}
+<div class="dashboard-header" style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 15px; margin-bottom: 20px;">
+  
+  <div class="totais" style="display: flex; gap: 25px; flex-wrap: wrap;">
+    <div style="background: #e0f7fa; padding: 12px 20px; border-radius: 8px; min-width: 180px; text-align: center;">
+      <h3 style="margin: 0; font-size: 1rem; color: #00796b;">Ganho Total no Mês</h3>
+      <p style="font-size: 1.4rem; font-weight: 700; margin: 5px 0 0 0;">R$ {{ total_valor_mes | default('0.00') | float | round(2) }}</p>
     </div>
+
+    <div style="background: #e0f7fa; padding: 12px 20px; border-radius: 8px; min-width: 180px; text-align: center;">
+      <h3 style="margin: 0; font-size: 1rem; color: #00796b;">Ganho Total no Dia</h3>
+      <p style="font-size: 1.4rem; font-weight: 700; margin: 5px 0 0 0;">R$ {{ total_valor_dia | default('0.00') | float | round(2) }}</p>
+    </div>
+  </div>
+
+  <form method="GET" action="{{ url_for('dashboard') }}" style="min-width: 200px; display: flex; align-items: center; gap: 8px;">
+    <label for="data_filtro" style="font-weight: 600; color: #555;">Filtrar por data:</label>
+    <input type="date" id="data_filtro" name="data_filtro" value="{{ data_filtro }}" style="padding: 6px 10px; border-radius: 6px; border: 1px solid #ccc;">
+    <button type="submit" class="btn" style="padding: 6px 12px;">Filtrar</button>
+  </form>
+
 </div>
 
-<!-- Filtro por data -->
-<section style="margin-bottom: 20px;">
-    <form method="get" action="{{ url_for('dashboard') }}">
-        <label for="data_filtro">Filtrar por data:</label>
-        <input type="date" id="data_filtro" name="data_filtro" value="{{ data_filtro or '' }}">
-        <button type="submit" class="btn">Filtrar</button>
-    </form>
-</section>
-
-<!-- Lista de entregas -->
-<section>
-    <h2>📦 Suas Entregas</h2>
-
-    {% if entregas %}
-    <div class="table-container" style="overflow-x:auto;">
-        <table style="width: 100%; border-collapse: collapse;">
-            <thead>
-                <tr style="background-color: #e2e8f0;">
-                    <th>ID</th>
-                    <th>Descrição</th>
-                    <th>Valor</th>
-                    <th>Hora do Pedido</th>
-                    <th>Hora Atribuída</th>
-                    <th>Status Pagamento</th>
-                    <th>Status Entrega</th>
-                    <th>Ações</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for entrega in entregas %}
-                <tr style="border-bottom: 1px solid #ddd;">
-                    <td>#{{ entrega.id }}</td>
-                    <td>{{ entrega.descricao }}</td>
-                    <td>R$ {{ '%.2f' % (entrega.valor or 0) }}</td>
-                    <td>{{ entrega.hora_pedido|utc_to_brt }}</td>
-                    <td>{{ entrega.hora_atribuida|utc_to_brt }}</td>
-                    <td>
-                        <span class="status-{{ entrega.status_pagamento }}">
-                            {{ entrega.status_pagamento.capitalize() }}
-                        </span>
-                    </td>
-                    <td>
-                        <span class="status-{{ entrega.status_entrega|replace(' ', '-') }}">
-                            {{ entrega.status_entrega.capitalize() }}
-                        </span>
-                    </td>
-                    <td>
-                        <a href="{{ url_for('editar_entrega', entrega_id=entrega.id) }}" class="btn" style="margin-right: 5px;">✏️</a>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    {% else %}
-    <p>🚫 Nenhuma entrega registrada para este dia.</p>
-    {% endif %}
-</section>
+<div class="entregas-list" style="max-height: 380px; overflow-y: auto; border: 1px solid #ccc; border-radius: 8px; padding: 12px; background: #fff;">
+  {% if entregas %}
+    <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+      <thead style="background-color: #00796b; color: white;">
+        <tr>
+          <th style="padding: 10px; text-align: left;">Cliente</th>
+          <th style="padding: 10px; text-align: center; width: 120px;">Valor (R$)</th>
+          <th style="padding: 10px; text-align: center; width: 160px;">Hora Pedido</th>
+          <th style="padding: 10px; text-align: center; width: 160px;">Hora Atribuída</th>
+          <th style="padding: 10px; text-align: center; width: 120px;">Pagamento</th>
+          <th style="padding: 10px; text-align: center; width: 120px;">Status Entrega</th>
+          <th style="padding: 10px; text-align: center; width: 80px;">Editar</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in entregas %}
+        <tr style="border-bottom: 1px solid #eee;">
+          <td style="padding: 8px;">{{ e.descricao }}</td>
+          <td style="padding: 8px; text-align: center;">{{ "%.2f"|format(e.valor) }}</td>
+          <td style="padding: 8px; text-align: center;">{{ e.hora_pedido|utc_to_brt }}</td>
+          <td style="padding: 8px; text-align: center;">{{ e.hora_atribuida|utc_to_brt if e.hora_atribuida else '' }}</td>
+          <td style="padding: 8px; text-align: center;">{{ e.status_pagamento.capitalize() }}</td>
+          <td style="padding: 8px; text-align: center;">{{ e.status_entrega.capitalize() }}</td>
+          <td style="padding: 8px; text-align: center;">
+            <a href="{{ url_for('editar_entrega', entrega_id=e.id) }}" class="btn btn-small">Editar</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p style="text-align: center; color: #999; margin: 20px 0;">Nenhuma entrega encontrada para a data selecionada.</p>
+  {% endif %}
+</div>
 
 <style>
-    /* Status Pagamento */
-    .status-pendente {
-        color: #e07c7c;
-        font-weight: bold;
+  /* Responsividade simples para celular */
+  @media (max-width: 480px) {
+    .dashboard-header {
+      flex-direction: column;
+      align-items: flex-start;
     }
-    .status-pago {
-        color: #2e7d32;
-        font-weight: bold;
+    .totais {
+      width: 100%;
+      justify-content: space-between;
     }
-    /* Status Entrega */
-    .status-pendente {
-        color: #e07c7c;
-        font-weight: bold;
+    .totais > div {
+      min-width: 45%;
+      margin-bottom: 10px;
     }
-    .status-em-rota {
-        color: #1976d2;
-        font-weight: bold;
+    form {
+      width: 100%;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
     }
-    .status-entregue {
-        color: #2e7d32;
-        font-weight: bold;
+    form label {
+      width: 100%;
     }
+    form input[type="date"], form button {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    table {
+      font-size: 0.85rem;
+    }
+  }
 </style>
 {% endblock %}
