@@ -162,12 +162,36 @@ def dashboard():
             total_entregas_ano=total_entregas_ano
         )
 
+    # Adiciona total valor do dia e do mês para o cooperado
+    inicio_mes = datetime(data_filtro.year, data_filtro.month, 1, tzinfo=timezone.utc)
+    if data_filtro.month < 12:
+        fim_mes = datetime(data_filtro.year, data_filtro.month + 1, 1, tzinfo=timezone.utc)
+    else:
+        fim_mes = datetime(data_filtro.year + 1, 1, 1, tzinfo=timezone.utc)
+
+    total_valor_dia = db.session.query(
+        db.func.coalesce(db.func.sum(Entrega.valor), 0)
+    ).filter(
+        Entrega.cooperado_id == session["usuario_id"],
+        Entrega.hora_pedido >= inicio_dia,
+        Entrega.hora_pedido <= fim_dia
+    ).scalar()
+
+    total_valor_mes = db.session.query(
+        db.func.coalesce(db.func.sum(Entrega.valor), 0)
+    ).filter(
+        Entrega.cooperado_id == session["usuario_id"],
+        Entrega.hora_pedido >= inicio_mes,
+        Entrega.hora_pedido < fim_mes
+    ).scalar()
+
     entregas = Entrega.query.filter(
         Entrega.cooperado_id == session["usuario_id"],
         Entrega.hora_pedido >= inicio_dia,
         Entrega.hora_pedido <= fim_dia
     ).order_by(Entrega.hora_pedido.desc()).all()
-    return render_template("dashboard_cooperado.html", entregas=entregas, data_filtro=data_filtro_str)
+    return render_template("dashboard_cooperado.html", entregas=entregas, data_filtro=data_filtro_str,
+                           total_valor_dia=total_valor_dia, total_valor_mes=total_valor_mes)
 
 @app.route("/logout")
 def logout():

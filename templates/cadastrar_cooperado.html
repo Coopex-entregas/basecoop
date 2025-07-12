@@ -1,73 +1,105 @@
 {% extends "base.html" %}
 
-{% block title %}Cadastrar Cooperado - Coopex{% endblock %}
+{% block title %}Painel do Cooperado - Coopex{% endblock %}
 
 {% block content %}
 <div class="header">
-    <h1>Cadastrar Novo Cooperado</h1>
-    <div class="nav-links">
-        <a href="{{ url_for('dashboard') }}" class="btn-secondary">
-            <span style="margin-right: 8px;">←</span>
-            Voltar ao Dashboard
-        </a>
-    </div>
+    <h1>Painel do Cooperado</h1>
+    <p style="color: #718096;">Bem-vindo, {{ session['usuario_nome'] }}!</p>
 </div>
 
-<div class="content">
-    {% with messages = get_flashed_messages() %}
-        {% if messages %}
-            {% for msg in messages %}
-                {% if "sucesso" in msg %}
-                    <div class="alert alert-success">{{ msg }}</div>
-                {% else %}
-                    <div class="alert alert-error">{{ msg }}</div>
-                {% endif %}
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
+<!-- Ganhos do Dia e do Mês -->
+<section style="margin: 20px 0; padding: 15px; background: #f7fafc; border: 1px solid #ccc; border-radius: 8px;">
+    <h2 style="font-size: 18px;">💰 Seus Ganhos</h2>
+    <p><strong>Hoje:</strong> R$ {{ '%.2f' % total_valor_dia }}</p>
+    <p><strong>Este mês:</strong> R$ {{ '%.2f' % total_valor_mes }}</p>
+</section>
 
-    <div style="max-width: 500px; margin: 0 auto;">
-        <div style="text-align: center; margin-bottom: 30px;">
-            <div style="font-size: 4rem; margin-bottom: 15px;">👤</div>
-            <h2 style="color: #4a5568; margin-bottom: 10px;">Novo Cooperado</h2>
-            <p style="color: #718096;">Preencha os dados para cadastrar um novo cooperado no sistema</p>
+<!-- Entregas -->
+<section style="margin: 20px 0; padding: 15px; background: #ffffff; border: 1px solid #ccc; border-radius: 8px;">
+    <h2 style="font-size: 18px;">📦 Suas Entregas</h2>
+
+    {% if entregas %}
+        <div class="table-container" style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="background-color: #e2e8f0;">
+                        <th>ID</th>
+                        <th>Descrição</th>
+                        <th>Valor</th>
+                        <th>Hora do Pedido</th>
+                        <th>Hora Atribuída</th>
+                        <th>Status Pagamento</th>
+                        <th>Status Entrega</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entrega in entregas %}
+                    <tr style="border-bottom: 1px solid #ddd;">
+                        <td>#{{ entrega.id }}</td>
+                        <td>{{ entrega.descricao }}</td>
+                        <td>R$ {{ '%.2f' % (entrega.valor or 0) }}</td>
+                        <td>{{ entrega.hora_pedido|utc_to_brt }}</td>
+                        <td>{{ entrega.hora_atribuida|utc_to_brt }}</td>
+                        <td>
+                            <span class="status-{{ entrega.status_pagamento }}">
+                                {{ entrega.status_pagamento.capitalize() }}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="status-{{ entrega.status_entrega|replace(' ', '-') }}">
+                                {{ entrega.status_entrega.capitalize() }}
+                            </span>
+                        </td>
+                        <td>
+                            <a href="{{ url_for('editar_entrega', entrega_id=entrega.id) }}" class="btn" style="margin-right: 5px;">✏️</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
-
-        <form method="POST" action="{{ url_for('cadastrar_cooperado') }}">
-            <div class="form-group">
-                <label for="nome">Nome do Cooperado:</label>
-                <input type="text" id="nome" name="nome" required placeholder="Digite o nome completo do cooperado">
-            </div>
-
-            <div class="form-group">
-                <label for="senha">Senha de Acesso:</label>
-                <input type="password" id="senha" name="senha" required placeholder="Digite uma senha segura">
-                <small style="color: #718096; font-size: 14px; margin-top: 5px; display: block;">
-                    A senha será usada pelo cooperado para acessar o sistema
-                </small>
-            </div>
-
-            <div style="display: flex; gap: 15px; margin-top: 30px;">
-                <button type="submit" class="btn" style="flex: 1;">
-                    <span style="margin-right: 8px;">✓</span>
-                    Cadastrar Cooperado
-                </button>
-                <a href="{{ url_for('dashboard') }}" class="btn btn-secondary" style="flex: 1; text-align: center;">
-                    Cancelar
-                </a>
-            </div>
-        </form>
-
-        <div style="background: #f7fafc; padding: 20px; border-radius: 8px; margin-top: 30px;">
-            <h3 style="color: #4a5568; margin-bottom: 15px; font-size: 1.1rem;">ℹ️ Informações Importantes</h3>
-            <ul style="color: #718096; line-height: 1.6;">
-                <li>O cooperado poderá acessar o sistema com o nome e senha cadastrados</li>
-                <li>Ele terá acesso apenas às suas próprias entregas</li>
-                <li>Poderá atualizar o status de pagamento e entrega das suas entregas</li>
-                <li>O nome deve ser único no sistema</li>
-            </ul>
+    {% else %}
+        <div style="text-align: center; padding: 20px; color: #718096;">
+            <p>🚫 Nenhuma entrega registrada ainda.</p>
         </div>
-    </div>
-</div>
+    {% endif %}
+</section>
+
+<style>
+    @media (max-width: 600px) {
+        table, thead, tbody, th, td, tr {
+            font-size: 14px;
+        }
+
+        h2 {
+            font-size: 16px;
+        }
+
+        .btn {
+            font-size: 14px;
+        }
+    }
+
+    .status-pendente {
+        color: #e07c7c;
+        font-weight: bold;
+    }
+
+    .status-pago {
+        color: #2e7d32;
+        font-weight: bold;
+    }
+
+    .status-em-rota {
+        color: #1976d2;
+        font-weight: bold;
+    }
+
+    .status-entregue {
+        color: #2e7d32;
+        font-weight: bold;
+    }
+</style>
 {% endblock %}
-
