@@ -19,19 +19,5 @@
 
         <button type="submit" class="btn" style="background-color: #4caf50; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer;">Cadastrar</button>
     </form>
-
-    {% if cooperados %}
-        <h3 style="margin-top: 40px;">Cooperados Cadastrados</h3>
-        <ul style="list-style: none; padding: 0;">
-            {% for c in cooperados %}
-                <li style="margin: 8px 0; padding: 10px; background-color: #f9f9f9; border: 1px solid #ddd; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
-                    {{ c.nome }}
-                    <form action="{{ url_for('excluir_cooperado', cooperado_id=c.id) }}" method="POST" style="margin: 0;" onsubmit="return confirm('Deseja excluir {{ c.nome }}?')">
-                        <button type="submit" class="btn btn-danger" style="padding: 5px 10px;">Excluir</button>
-                    </form>
-                </li>
-            {% endfor %}
-        </ul>
-    {% endif %}
 </div>
 {% endblock %}
