@@ -1,72 +1,48 @@
 {% extends "base.html" %}
 
-{% block title %}{% if cooperado %}Editar Cooperado{% else %}Cadastrar Cooperado{% endif %} - Coopex{% endblock %}
+{% block title %}Cadastrar Cooperado - Coopex{% endblock %}
 
 {% block content %}
-<div class="header">
-    <h1>{% if cooperado %}Editar Cooperado{% else %}Cadastrar Novo Cooperado{% endif %}</h1>
-    <div class="nav-links">
-        <a href="{{ url_for('dashboard') }}" class="btn-secondary">
-            <span style="margin-right: 8px;">←</span> Voltar ao Dashboard
-        </a>
-    </div>
-</div>
+<h1>Cadastrar / Editar Cooperado</h1>
 
-<div class="content">
-    {% with messages = get_flashed_messages() %}
-        {% if messages %}
-            {% for msg in messages %}
-                {% if "sucesso" in msg %}
-                    <div class="alert alert-success">{{ msg }}</div>
-                {% else %}
-                    <div class="alert alert-error">{{ msg }}</div>
-                {% endif %}
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
+<!-- Formulário para cadastrar ou editar cooperado -->
+<form method="POST" action="{{ url_for('cadastrar_ou_editar_cooperado') }}">
+    {% if cooperado_atual %}
+        <input type="hidden" name="id" value="{{ cooperado_atual.id }}">
+    {% endif %}
+    <label for="nome">Nome:</label><br>
+    <input type="text" id="nome" name="nome" value="{{ cooperado_atual.nome if cooperado_atual else '' }}" required><br><br>
 
-    <div style="max-width: 500px; margin: 0 auto;">
-        <form method="POST" action="">
-            <div class="form-group">
-                <label for="nome">Nome do Cooperado:</label>
-                <input
-                    type="text"
-                    id="nome"
-                    name="nome"
-                    required
-                    placeholder="Digite o nome completo do cooperado"
-                    value="{{ cooperado.nome if cooperado else '' }}"
-                >
-            </div>
+    <label for="tipo">Tipo:</label><br>
+    <select id="tipo" name="tipo" required>
+        <option value="cooperado" {% if cooperado_atual and cooperado_atual.tipo == 'cooperado' %}selected{% endif %}>Cooperado</option>
+        <option value="admin" {% if cooperado_atual and cooperado_atual.tipo == 'admin' %}selected{% endif %}>Administrador</option>
+    </select><br><br>
 
-            <div class="form-group">
-                <label for="senha">{% if cooperado %}Nova senha (opcional){% else %}Senha de Acesso{% endif %}:</label>
-                <input
-                    type="password"
-                    id="senha"
-                    name="senha"
-                    {% if not cooperado %}required{% endif %}
-                    placeholder="{% if cooperado %}Deixe em branco para manter a senha atual{% else %}Digite uma senha segura{% endif %}"
-                >
-                <small style="color: #718096; font-size: 14px; margin-top: 5px; display: block;">
-                    {% if cooperado %}
-                        Preencha para alterar a senha
-                    {% else %}
-                        A senha será usada pelo cooperado para acessar o sistema
-                    {% endif %}
-                </small>
-            </div>
+    <button type="submit" class="btn">Salvar</button>
+    {% if cooperado_atual %}
+        <a href="{{ url_for('cadastrar_ou_editar_cooperado') }}" class="btn btn-secondary">Cancelar edição</a>
+    {% endif %}
+</form>
 
-            <div style="display: flex; gap: 15px; margin-top: 30px;">
-                <button type="submit" class="btn" style="flex: 1;">
-                    <span style="margin-right: 8px;">✓</span>
-                    {% if cooperado %}Atualizar{% else %}Cadastrar{% endif %}
-                </button>
-                <a href="{{ url_for('dashboard') }}" class="btn btn-secondary" style="flex: 1; text-align: center;">
-                    Cancelar
-                </a>
-            </div>
-        </form>
-    </div>
-</div>
+<hr>
+
+<h2>Cooperados Cadastrados</h2>
+
+{% if cooperados %}
+    <ul>
+    {% for c in cooperados %}
+        <li>
+            {{ c.nome }} ({{ c.tipo }})
+            <a href="{{ url_for('editar_cooperado', cooperado_id=c.id) }}" class="btn btn-sm" style="margin-left:10px;">Editar</a>
+            <form style="display:inline;" method="POST" action="{{ url_for('excluir_cooperado', cooperado_id=c.id) }}" onsubmit="return confirm('Tem certeza que deseja excluir {{ c.nome }}?')">
+                <button type="submit" class="btn btn-danger btn-sm">Excluir</button>
+            </form>
+        </li>
+    {% endfor %}
+    </ul>
+{% else %}
+    <p>Nenhum cooperado cadastrado.</p>
+{% endif %}
+
 {% endblock %}

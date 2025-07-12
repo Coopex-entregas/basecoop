@@ -8,12 +8,12 @@
   <div class="totais" style="display: flex; gap: 25px; flex-wrap: wrap;">
     <div style="background: #e0f7fa; padding: 12px 20px; border-radius: 8px; min-width: 180px; text-align: center;">
       <h3 style="margin: 0; font-size: 1rem; color: #00796b;">Ganho Total no Mês</h3>
-      <p style="font-size: 1.4rem; font-weight: 700; margin: 5px 0 0 0;">R$ {{ total_valor_mes | default('0.00') | float | round(2) }}</p>
+      <p style="font-size: 1.4rem; font-weight: 700; margin: 5px 0 0 0;">R$ {{ '%.2f' % total_valor_mes }}</p>
     </div>
 
     <div style="background: #e0f7fa; padding: 12px 20px; border-radius: 8px; min-width: 180px; text-align: center;">
       <h3 style="margin: 0; font-size: 1rem; color: #00796b;">Ganho Total no Dia</h3>
-      <p style="font-size: 1.4rem; font-weight: 700; margin: 5px 0 0 0;">R$ {{ total_valor_dia | default('0.00') | float | round(2) }}</p>
+      <p style="font-size: 1.4rem; font-weight: 700; margin: 5px 0 0 0;">R$ {{ '%.2f' % total_valor_dia }}</p>
     </div>
   </div>
 
@@ -43,7 +43,7 @@
         {% for e in entregas %}
         <tr style="border-bottom: 1px solid #eee;">
           <td style="padding: 8px;">{{ e.descricao }}</td>
-          <td style="padding: 8px; text-align: center;">{{ "%.2f"|format(e.valor) }}</td>
+          <td style="padding: 8px; text-align: center;">{{ '%.2f' % e.valor }}</td>
           <td style="padding: 8px; text-align: center;">{{ e.hora_pedido|utc_to_brt }}</td>
           <td style="padding: 8px; text-align: center;">{{ e.hora_atribuida|utc_to_brt if e.hora_atribuida else '' }}</td>
           <td style="padding: 8px; text-align: center;">{{ e.status_pagamento.capitalize() }}</td>
@@ -61,7 +61,6 @@
 </div>
 
 <style>
-  /* Responsividade simples para celular */
   @media (max-width: 480px) {
     .dashboard-header {
       flex-direction: column;

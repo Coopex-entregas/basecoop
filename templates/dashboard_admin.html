@@ -8,7 +8,6 @@
     <p style="color: #718096; margin-bottom: 20px;">Bem-vindo, {{ session['usuario_nome'] }}!</p>
     
     <div class="nav-links" style="margin-bottom: 20px;">
-        <!-- Alterei o endpoint para o correto -->
         <a href="{{ url_for('cadastrar_ou_editar_cooperado') }}" class="btn" style="margin-right:10px;">
             👤 Cadastrar Cooperado
         </a>
@@ -44,16 +43,9 @@
     }
 </style>
 
-<!-- Estatísticas e filtro de data juntos -->
+<!-- Estatísticas -->
 <section style="margin: 20px 0; padding: 15px; background-color: #f7fafc; border: 1px solid #ccc; border-radius: 8px;">
     <h2>📊 Estatísticas Gerais</h2>
-    
-    <form method="get" action="{{ url_for('dashboard') }}" style="margin-bottom: 15px;">
-        <label for="data_filtro" style="margin-right: 10px;">Filtrar por data:</label>
-        <input type="date" id="data_filtro" name="data_filtro" value="{{ data_filtro or '' }}">
-        <button type="submit" class="btn" style="margin-left: 10px;">Filtrar</button>
-    </form>
-    
     <p><strong>Total de entregas hoje:</strong> {{ total_dia }}</p>
     <p><strong>Total de entregas no ano:</strong> {{ total_entregas_ano }}</p>
     <p><strong>Total ganho no mês:</strong> R$ {{ '%.2f' % total_valor_mes }}</p>
@@ -70,11 +62,19 @@
     {% endif %}
 </section>
 
-<!-- Lista de cooperados - EXCLUINDO os que são do tipo "cooperado" -->
+<!-- Filtro de data -->
+<section style="margin: 20px 0; padding: 15px; background-color: #f7fafc; border: 1px solid #ccc; border-radius: 8px;">
+    <form method="get" action="{{ url_for('dashboard') }}">
+        <label for="data_filtro">Filtrar por data:</label>
+        <input type="date" id="data_filtro" name="data_filtro" value="{{ data_filtro or '' }}">
+        <button type="submit" class="btn">Filtrar</button>
+    </form>
+</section>
+
+<!-- Lista de cooperados -->
 <section style="margin: 20px 0; padding: 15px; background-color: #f7fafc; border: 1px solid #ccc; border-radius: 8px;">
     <h2>👥 Cooperados Cadastrados</h2>
 
-    {% set cooperados_admin = cooperados | selectattr("tipo", "ne", "cooperado") | list %}
     {% if cooperados_admin %}
         <div class="cooperados-list" style="display: flex; flex-direction: column; gap: 12px;">
             {% for c in cooperados_admin %}
@@ -92,12 +92,7 @@
             {% endfor %}
         </div>
     {% else %}
-        <div style="text-align: center; padding: 40px; color: #718096;">
-            <p>Nenhum cooperado cadastrado ainda.</p>
-            <a href="{{ url_for('cadastrar_ou_editar_cooperado') }}" class="btn" style="margin-top: 15px;">
-                Cadastrar Primeiro Cooperado
-            </a>
-        </div>
+        <!-- Sem mensagem e botão -->
     {% endif %}
 </section>
 
