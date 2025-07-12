@@ -120,6 +120,7 @@
                         <th>Descrição</th>
                         <th>Valor</th>
                         <th>Hora do Pedido</th>
+                        <th>Hora Atribuída</th>
                         <th>Cooperado</th>
                         <th>Status Pagamento</th>
                         <th>Status Entrega</th>
@@ -132,6 +133,8 @@
                         <td>#{{ entrega.id }}</td>
                         <td>{{ entrega.descricao }}</td>
                         <td>R$ {{ '%.2f' % (entrega.valor or 0) }}</td>
+                        <td>{{ entrega.hora_pedido|utc_to_brt }}</td>
+                        <td>{{ entrega.hora_atribuida|utc_to_brt }}</td>
                         <td>{{ entrega.cooperado.nome if entrega.cooperado else '---' }}</td>
                         <td>
                             <span class="status-{{ entrega.status_pagamento }}">
